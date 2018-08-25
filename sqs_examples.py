@@ -28,3 +28,12 @@ qurl='https://sqs.us-west-2.amazonaws.com/988956399400/s3_test'
 response=client.send_message(MessageBody='update')
 response=client.send_message(QueueUrl=qurl,MessageBody='update')
 response
+
+// get message
+s3msg = client.receive_message(QueueUrl='https://sqs.us-west-2.amazonaws.com/988956399400/s3_test')
+s3msg['Messages'][0]['Body']
+// delete the message
+res=client.delete_message(QueueUrl=qurl,ReceiptHandle=s3msg['Messages'][0]['ReceiptHandle'])
+
+// purge
+res=client.purge_queue(QueueUrl=qurl)
