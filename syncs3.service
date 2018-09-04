@@ -1,0 +1,14 @@
+[Unit]
+Description=sync s3 to nfs /projects
+After=network.target
+StartLimitInterval=0
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=1
+User=ubuntu
+ExecStart=/usr/bin/env syncs3.py -d /projects
+
+[Install]
+WantedBy=multi-user.target
