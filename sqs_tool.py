@@ -57,6 +57,8 @@ parser.add_argument( "-u", "--url", default = defSqsUrl,
                      help = "url of sqs [default: " + defSqsUrl + "]" )
 parser.add_argument( "-P", "--purgequeue", action="store_true", default = False,
                      help = "Purge sqs queue [default: False]" )
+parser.add_argument( "-l", "--listmsgs", action="store_true", default = False,
+                     help = "Send test message to sqs [default: False]" )
 parser.add_argument( "-s", "--sendmsg", action="store_true", default = False,
                      help = "Send test message to sqs [default: False]" )
 parser.add_argument( "-m", "--message", default = defMsg,
@@ -69,13 +71,14 @@ url = args.url
 message = args.message
 purgequeue = args.purgequeue
 sendmsg = args.sendmsg
+listmsgs = args.listmsgs
 # version
 if args.version:
     print(__file__ + " version: " + version)
     sys.exit()
-    # get the sqs client
-if sendmsg or purgequeue:
-    sqs = boto3.client("sqs")
+# get the sqs client
+sqs = boto3.client("sqs")
+if sendmsg:
     # send message
     if sendmsg:
         pInfo("Sending message: " + message)
@@ -83,8 +86,18 @@ if sendmsg or purgequeue:
         sqs.send_message(QueueUrl=url,MessageBody=message)
 
     # purge sqs
-    if purgequeue:
-        pInfo("Purging queue: " + url)
-        sqs.purge_queue(QueueUrl=url)
+elif purgequeue:
+    pInfo("Purging queue: " + url)
+    sqs.purge_queue(QueueUrl=url)
+elif listmsgs:
+    msgKey = "Messages"
+    while True:
+        msg = sqs.receive_message(QueueUrl=url,WaitTimeSeconds=1)
+        if msgKey in msg.keys():
+            theMsg = msg[msgKey][0]['Body']
+            rHandle = msg[msgKey][0]['ReceiptHandle']
+            pInfo("Message: " + theMsg + "\n\tHandle: " + str(rHandle))
+        else:
+            break
 else:
     parser.print_help(sys.stderr)
