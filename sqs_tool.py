@@ -80,15 +80,14 @@ if args.version:
     sys.exit()
 # get the sqs client
 sqs = boto3.client("sqs")
+# send message
 if sendmsg:
-    # send message
-    if sendmsg:
-        sqsmsg = sqsmsg.encode(message, typemsg = 'test')
-        pInfo("Sending message: " + sqsmsg)
-        # send it
-        sqs.send_message(QueueUrl=url,MessageBody=sqsmsg)
+    sqsmsg = sqsmsg.encode(message, typemsg = 'test')
+    pInfo("Sending message: " + sqsmsg)
+    # send it
+    sqs.send_message(QueueUrl=url,MessageBody=sqsmsg)
 
-    # purge sqs
+# purge sqs
 elif purgequeue:
     pInfo("Purging queue: " + url)
     sqs.purge_queue(QueueUrl=url)

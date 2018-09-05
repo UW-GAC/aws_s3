@@ -36,9 +36,14 @@ sqs_tool.py -l
 ```
 7. <i>Example 7</i> - Send a default message to the SQS queue
 ```{r}
-sqs_tool.py -l
+sqs_tool.py -s
 ```
 7. <i>Example 7</i> - Purge all the messages in the SQS queue
 ```{r}
 sqs_tool.py -P
+```
+8. <i>Example 8</i> - Upload all the files in the cwd (where the cwd is a directory under /projects) but do not send a message to sqs to synchronize s3 to nfs on aws.  Subdirectories are not uploaded.
+```{r}
+cd /projects/analysts/kuraisa
+upload_tree_s3.py -N
 ```
