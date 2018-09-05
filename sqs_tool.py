@@ -65,6 +65,8 @@ parser.add_argument( "-s", "--sendmsg", action="store_true", default = False,
                      help = "Send test message to sqs [default: False]" )
 parser.add_argument( "-m", "--message", default = defMsg,
                      help = "test message to send to sqs [default: " + defMsg + "]" )
+parser.add_argument( "-p", "--profile",
+                     help = "aws cli profile [default: default]" )
 parser.add_argument( "--version", action="store_true", default = False,
                      help = "Print version of " + __file__ )
 args = parser.parse_args()
@@ -74,12 +76,14 @@ message = args.message
 purgequeue = args.purgequeue
 sendmsg = args.sendmsg
 listmsgs = args.listmsgs
+profile = args.profile
 # version
 if args.version:
     print(__file__ + " version: " + version)
     sys.exit()
 # get the sqs client
-sqs = boto3.client("sqs")
+session = boto3.Session(profile_name=profile)
+sqs = session.client('sqs')
 # send message
 if sendmsg:
     sqsmsg = sqsmsg.encode(message, typemsg = 'test')

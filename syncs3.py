@@ -106,6 +106,7 @@ def Summary(hdr):
     print( '\tDestination Root Folder: ' + destfolder)
     print( '\tMessage log: ' + messagelog)
     print( '\tDetail log: ' + logfile)
+    print( '\tAWS cli profile: ' + profile)
     print( '\tSQS URL: ' + url)
     print( '\tWait time for sqs msg: ' + str(waittime))
     print( '\tPurge message queue after receiving message: ' + str(purgequeue))
@@ -201,7 +202,7 @@ mlog = open (messagelog, 'a+', 1)
 # open detail log file
 dlog = open (logfile, 'w', 1)
 # get the sqs client
-sqs = boto3.client("sqs")
+sqs = session.client("sqs")
 
 # loop for ever to process messages
 ServiceLog("forever loop to get sqs message ...")

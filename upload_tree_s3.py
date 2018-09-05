@@ -96,6 +96,7 @@ def Summary(hdr):
     print ('\tCopy changed or new files: ' + str(changed))
     print( '\tLog file of update: ' + logfile)
     print( '\tS3 Bucket: ' + bucketname)
+    print( '\tAWS cli profile: ' + profile)
     print( '\tSQS message: ' + message)
     print( '\tSQS type of message: ' + typemessage)
     print( '\tSQS full encoded message: ' + sqsmsg)
@@ -230,7 +231,7 @@ if nomessaging:
 else:
     # send a message to sqs
     pInfo("Sending SQS message")
-    sqs=boto3.client("sqs")
+    sqs=session.client("sqs")
     pDebug('Sending SQS:\nURL: ' + url + '\nmessage to encode: ' + message)
     response=sqs.send_message(QueueUrl=url,MessageBody=sqsmsg)
 
