@@ -25,17 +25,22 @@ for i in range(readline.get_current_history_length()):
 # send message
 import boto3
 client=boto3.client("sqs")
-qurl='https:#sqs.us-west-2.amazonaws.com/988956399400/s3_test'
+qurl='https://sqs.us-west-2.amazonaws.com/988956399400/s3_test'
 response=client.send_message(MessageBody='update')
 response=client.send_message(QueueUrl=qurl,MessageBody='update')
 response
 
 # get message
-s3msg = client.receive_message(QueueUrl='https:#sqs.us-west-2.amazonaws.com/988956399400/s3_test')
+s3msg = client.receive_message(QueueUrl=qurl)
 s3msg['Messages'][0]['Body']
 # delete the message
 res=client.delete_message(QueueUrl=qurl,ReceiptHandle=s3msg['Messages'][0]['ReceiptHandle'])
 
+# use message attributes
+mattribute={'MType': {'StringValue': 'Test', 'DataType': 'String'}}
+mbody='msg with attribute'
+
+response=client.send_message(QueueUrl=qurl,MessageBody=mbody,MessageAttributes=mattribute)
 # purge
 res=client.purge_queue(QueueUrl=qurl)
 #=============================================

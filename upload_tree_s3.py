@@ -11,6 +11,7 @@ import     getpass
 import     fnmatch
 import     datetime
 from       dateutil import tz
+import     sqsmsg
 
 try:
     import boto3
@@ -96,6 +97,8 @@ def Summary(hdr):
     print( '\tLog file of update: ' + logfile)
     print( '\tS3 Bucket: ' + bucketname)
     print( '\tSQS message: ' + message)
+    print( '\tSQS type of message: ' + typemessage)
+    print( '\tSQS full encoded message: ' + sqsmsg)
     print( '\tSQS URL: ' + url)
     print( '\tNo messages to SQS when update complete: ' + str(nomessaging))
     print( '\tDebug: ' + str(debug))
@@ -106,6 +109,8 @@ def Summary(hdr):
 defSqsUrl = 'https://sqs.us-west-2.amazonaws.com/988956399400/s3_test'
 defS3Bucket = 'projects-pearson'
 defLogfile = './update_to_s3.log'
+defMsg = 'updated s3'
+defTypeMsg = 's3change'
 # parse input
 parser = ArgumentParser( description = "script to copy local directory tree to s3 and send an sqs msg" )
 parser.add_argument( "-u", "--url", default = defSqsUrl,
@@ -118,8 +123,10 @@ parser.add_argument( "-i", "--include",
                      help = "Filter the files to include [default: no filtering]" )
 parser.add_argument( "-e", "--exclude",
                      help = "Filter the files to exlude [default: no filtering]" )
-parser.add_argument( "-m", "--message",
-                     help = "message sent to sqs [default: <time> update <user>]" )
+parser.add_argument( "-m", "--message", default = defMsg,
+                     help = "message to send to sqs [default: " + defMsg + "]" )
+parser.add_argument( "-t", "--typemessage", default = defTypeMsg,
+                     help = "type of message to send to sqs [default: " + defTypeMsg + "]" )
 parser.add_argument( "-N", "--nomessaging",action="store_true", default = False,
                      help = "No messages when update completes [default: False]" )
 parser.add_argument( "-b", "--bucketname", default = defS3Bucket,
@@ -140,6 +147,7 @@ args = parser.parse_args()
 # set result of arg parse_args
 url = args.url
 message = args.message
+typemessage = args.typemessage
 bucketname = args.bucketname
 logfile = args.logfile
 debug = args.Debug
@@ -176,9 +184,7 @@ source = os.path.abspath(srcdir)
 if profile == None:
     profile = 'default'
 # sqs message
-if message == None:
-    user = getpass.getuser()
-    message = time.asctime() + " upload s3://" + bucketname + srcdir + " by " + user
+sqsmsg = sqsmsg.encode(message, typemsg = typemessage)
 # summary
 if summary:
     Summary("Summary of " + __file__)
@@ -225,7 +231,7 @@ else:
     # send a message to sqs
     pInfo("Sending SQS message")
     sqs=boto3.client("sqs")
-    pDebug('Sending SQS:\nURL: ' + url + '\nmessage: ' + message)
-    response=sqs.send_message(QueueUrl=url,MessageBody=message)
+    pDebug('Sending SQS:\nURL: ' + url + '\nmessage to encode: ' + message)
+    response=sqs.send_message(QueueUrl=url,MessageBody=sqsmsg)
 
 pInfo("Upload completed.\n\tUpload count: " + str(upload_count) + "\n\tSkip count: " + str(skip_count))

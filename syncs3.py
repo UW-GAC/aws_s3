@@ -11,6 +11,8 @@ import     fnmatch
 import     datetime
 from       dateutil import tz
 import     distutils.dir_util
+import     sqsmsg
+
 try:
     import boto3
 except ImportError:
@@ -120,7 +122,7 @@ def pollSQS(sqs_a, url_a, waittime_a):
         while not receivedmsg:
             msg = sqs_a.receive_message(QueueUrl=url_a,WaitTimeSeconds=waittime_a)
             if msgKey in msg.keys():
-                theMsg = msg[msgKey][0]['Body']
+                theMsg = msg[msgKey][0]['Body']     # msg is encoded
                 rHandle = msg[msgKey][0]['ReceiptHandle']
                 receivedmsg = True
         return (theMsg,rHandle)
@@ -206,36 +208,53 @@ ServiceLog("forever loop to get sqs message ...")
 while True:
     # poll for message
     mh = pollSQS(sqs, url, waittime)
-    msg = mh[0]
+    msge = mh[0]
     rHandle = mh[1]
-    # execute awscmd
-    ServiceLog('Message found: ' + msg)
-    ServiceLog('Syncing s3 to destfolder ...')
-    keys = []
-    mtimes = []
-    LogInfo(dlog, 'Getting all folders/data names in S3 bucket ' + bucketname)
-    objs = s3.Bucket(bucketname).objects.all()
-    for obj in objs:
-        keys.append(obj.key)
-        mtimes.append(obj.last_modified)
-    # iterate over keys and download each
-    noKeys = len(keys)
-    for i in range(noKeys):
-        key = keys[i]
-        filename = os.path.basename(key)
-        mtime = mtimes[i]
-        downloadFile(s3, bucketname, key, mtime, destfolder, dlog)
-    # write the log and delete the message
-    mlog.write(msg + '\n')
-    ServiceLog('Sync complete - files downloaded/skip/error: ' + str(download_count) +
-               '/' + str(skip_count) + '/' + str(error_count))
+    # decode msg into dictionary
+    try:
+        msgd = sqsmsg.decode(msge)
+    except:
+        LogInfo(dlog, 'Invalid format of message; it will be deleted.')
+        sqs.delete_message(QueueUrl=url,
+                           ReceiptHandle=rHandle)
+        continue
+    msg = msgd['msg']
+    msgtype = msgd['type']
+    msgdate = msgd['date']
+    msgbywhom = msgd['bywhom']
+    # if the type is s3change, sync s3
+    if msgtype == 's3change':
+        ServiceLog('Message found: ' + msge)
+        ServiceLog('Syncing s3 to destfolder ...')
+        keys = []
+        mtimes = []
+        LogInfo(dlog, 'Getting all folders/data names in S3 bucket ' + bucketname)
+        objs = s3.Bucket(bucketname).objects.all()
+        for obj in objs:
+            keys.append(obj.key)
+            mtimes.append(obj.last_modified)
+        # iterate over keys and download each
+        noKeys = len(keys)
+        for i in range(noKeys):
+            key = keys[i]
+            filename = os.path.basename(key)
+            mtime = mtimes[i]
+            downloadFile(s3, bucketname, key, mtime, destfolder, dlog)
+        # write the log and delete the message
+        mlog.write(msge + '\n')
+        ServiceLog('Sync complete - files downloaded/skip/error: ' + str(download_count) +
+                   '/' + str(skip_count) + '/' + str(error_count))
+        # check if purge msg queue
+        if purgequeue:
+            ServiceInfo("Purging message queue: " + url)
+            # get the sqs client
+            sqs = boto3.client("sqs")
+            # purge
+            sqs.purge_queue(QueueUrl=url)
+    else:
+        ServiceLog('No-action message found: ' + msge)
+    # delete the message
     result = sqs.delete_message(QueueUrl=url,
                                 ReceiptHandle=rHandle)
-    # check if purge msg queue
-    if purgequeue:
-        ServiceInfo("Purging message queue: " + url)
-        # get the sqs client
-        sqs = boto3.client("sqs")
-        # purge
-        sqs.purge_queue(QueueUrl=url)
+
     ServiceLog("Waiting for next message")

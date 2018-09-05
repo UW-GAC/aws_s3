@@ -13,6 +13,8 @@ import     subprocess
 from       argparse import ArgumentParser
 from       datetime import datetime, timedelta
 import     getpass
+import     sqsmsg
+
 # init globals
 version='1.0'
 msgErrPrefix='>>> Error: '
@@ -81,9 +83,10 @@ sqs = boto3.client("sqs")
 if sendmsg:
     # send message
     if sendmsg:
-        pInfo("Sending message: " + message)
+        sqsmsg = sqsmsg.encode(message, typemsg = 'test')
+        pInfo("Sending message: " + sqsmsg)
         # send it
-        sqs.send_message(QueueUrl=url,MessageBody=message)
+        sqs.send_message(QueueUrl=url,MessageBody=sqsmsg)
 
     # purge sqs
 elif purgequeue:
