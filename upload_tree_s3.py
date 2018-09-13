@@ -88,10 +88,12 @@ def pDebug(msg):
 def Summary(hdr):
     print(hdr)
     print( '\tVersion: ' + version)
-    print( '\tSource: ' + source)
+    print( '\tSource file: ' + srcfile)
     print( '\tSource dir: ' + srcdir)
     print ('\tInclude filter: ' + str(include))
     print ('\tExclude filter: ' + str(exclude))
+    print ('\tDirectories include filter: ' + str(incdir))
+    print ('\tDirectories exclude filter: ' + str(exdir))
     print ('\tRecursive copy: ' + str(recursive))
     print ('\tCopy changed or new files: ' + str(changed))
     print( '\tLog file of update: ' + logfile)
@@ -103,6 +105,7 @@ def Summary(hdr):
     print( '\tSQS URL: ' + url)
     print( '\tNo messages to SQS when update complete: ' + str(nomessaging))
     print( '\tDebug: ' + str(debug))
+    print( '\tTest: ' + str(test))
     tmsg=time.asctime()
     print( '\tTime: ' + tmsg)
 
@@ -118,12 +121,18 @@ parser.add_argument( "-u", "--url", default = defSqsUrl,
                      help = "url of sqs [default: " + defSqsUrl + "]" )
 parser.add_argument( "-r", "--recursive", action="store_true", default = False,
                      help = "Recursively copy tree folder and subfolders [default: False]" )
-parser.add_argument( "-c", "--changed", action="store_true", default = False,
-                     help = "Only upload new or changed (by date modified) [default: False]" )
+parser.add_argument( "-c", "--changed", action="store_false", default = True,
+                     help = "Only upload new or changed (by date modified) [default: True]" )
 parser.add_argument( "-i", "--include",
                      help = "Filter the files to include [default: no filtering]" )
 parser.add_argument( "-e", "--exclude",
                      help = "Filter the files to exlude [default: no filtering]" )
+parser.add_argument( "-I", "--incdir",
+                     help = "Filter the directories to include [default: no filtering]" )
+parser.add_argument( "-E", "--exdir",
+                     help = "Filter the directories to exlude [default: no filtering]" )
+parser.add_argument( "-L", "--links", action="store_true", default = False,
+                     help = "Follow symbolic links [default: False]" )
 parser.add_argument( "-m", "--message", default = defMsg,
                      help = "message to send to sqs [default: " + defMsg + "]" )
 parser.add_argument( "-t", "--typemessage", default = defTypeMsg,
@@ -135,13 +144,15 @@ parser.add_argument( "-b", "--bucketname", default = defS3Bucket,
 parser.add_argument( "-l", "--logfile", default = defLogfile,
                      help = "log file of sync to s3 [default: " + defLogfile + "]" )
 parser.add_argument( "-s", "--source",
-                     help = "source of folder in tree to copy [default: cwd's tree]" )
+                     help = "source of folder or file in tree to copy [default: cwd's tree]" )
 parser.add_argument( "-p", "--profile",
                      help = "aws cli profile [default: default]" )
 parser.add_argument( "-D", "--Debug", action="store_true", default = False,
                      help = "Turn on debug output [default: False]" )
 parser.add_argument( "-S", "--summary", action="store_true", default = False,
                      help = "Print summary prior to executing [default: False]" )
+parser.add_argument( "-T", "--test", action="store_true", default = False,
+                     help = "Test without upload or sending message [default: False]" )
 parser.add_argument( "--version", action="store_true", default = False,
                      help = "Print version of " + __file__ )
 args = parser.parse_args()
@@ -160,6 +171,10 @@ exclude = args.exclude
 recursive = args.recursive
 nomessaging = args.nomessaging
 changed = args.changed
+incdir = args.incdir
+exdir = args.exdir
+links = args.links
+test = args.test
 
 # version
 if args.version:
@@ -173,23 +188,36 @@ else:
     if not os.path.exists(source):
         pError('Source ' + source + ' does not exist')
         sys.exit(2)
+    # check if it's a single file
     if not os.path.isdir(source):
-        srcdir = os.path.dirname(source)
         srcfile = os.path.basename(source)
+        srcdir = os.path.abspath(os.path.dirname(source))
+        # single file is not recursive
+        recursive = False
     else:
-        srcdir = source
         srcfile = ''
-# get abspath to account for relative dirs like "../"
-source = os.path.abspath(srcdir)
+        srcdir = os.path.abspath(source)
 # create aws session with s3 with appropriate credentials
 if profile == None:
     profile = 'default'
 # sqs message
 sqsmsg = sqsmsg.encode(message, typemsg = typemessage)
+if test:
+    debug = True
+    nomessaging = True
+    summary = True
+# if including or excluding directories then it's recursive
+if incdir != None or exdir != None:
+    recursive = True
+    if incdir != None:
+        incdir = srcdir + '/' + incdir
+    if exdir != None:
+        exdir = srcdir + '/' + exdir
 # summary
 if summary:
     Summary("Summary of " + __file__)
-    sys.exit()
+    if not test:
+        sys.exit()
 
 # Create boto3 session - any clients created from this session will use credentials
 # from the [dev] section of ~/.aws/credentials.
@@ -198,8 +226,11 @@ s3 = session.resource('s3')
 
 if srcfile != '':
     # process single file
-    pInfo("Uploading single file " + srcdir + "/" + srcfile)
-    uploadFile(s3, bucketname, srcdir, srcfile)
+    if test:
+        pDebug("Testing: would upload "  + srcdir + "/" + srcfile)
+    else:
+        pInfo("Uploading single file " + srcdir + "/" + srcfile)
+        uploadFile(s3, bucketname, srcdir, srcfile)
 else:
     # process directory
     if recursive:
@@ -208,23 +239,32 @@ else:
     else:
         pInfo("Uploading files in " + srcdir + "...")
     alldirs = {}
-    for (source, dirname, filename) in os.walk(srcdir):
+    for (source, dirname, filename) in os.walk(srcdir, followlinks = links):
         alldirs[source] = filename
         if not recursive:
             break
     print("\tIterating over " + str(len(alldirs)) + " directory/directories ...")
     for dir, files in alldirs.iteritems():
+        #print("dir: " + dir)
+        #print("\tfiles: " + str(files))
+        if incdir != None:
+            if dir.find(incdir,0,len(incdir)) == -1:
+                continue
+        elif exdir != None:
+            if dir.find(exdir,0,len(exdir)) == 0:
+                continue
         if len(files) > 0:
             for filename in files:
                 # check for filters
-                upload = True
                 if include != None:
                     if not fnmatch.fnmatch(filename,include):
-                        upload = False
+                        continue
                 elif exclude != None:
                     if fnmatch.fnmatch(filename,exclude):
-                        upload = False
-                if upload:
+                        continue
+                if test:
+                    pDebug('Testing: would upload ' + dir + '/' + filename + ' to s3://' + bucketname)
+                else:
                     uploadFile(s3, bucketname, dir, filename)
 if nomessaging:
     pInfo("Message not sent to SQS")
