@@ -143,6 +143,8 @@ defLogfile = '/tmp/syncs3_details.log'
 parser = ArgumentParser( description = "script to copy local files to s3 and send an sqs msg" )
 parser.add_argument( "-C", "--ctxfile", default = defCtxFile,
                      help = "Contexts json file [default: " + defCtxFile + "]" )
+parser.add_argument( "-p", "--profile",
+                     help = "Profile for aws credentials [default: based on awsctx]" )
 parser.add_argument( "-a", "--awsctx", default = defAwsCtx,
                      help = "Contexts json file [default: " + defAwsCtx + "]" )
 parser.add_argument( "-P", "--purgequeue", action="store_true", default = False,
@@ -163,6 +165,9 @@ parser.add_argument( "--version", action="store_true", default = False,
                      help = "Print version of " + __file__ )
 args = parser.parse_args()
 # set result of arg parse_args
+ctxfile = args.ctxfile
+awsctx = args.awsctx
+profile = args.profile
 messagelog = args.messagelog
 purgequeue = args.purgequeue
 debug = args.Debug
@@ -186,10 +191,11 @@ url = allctx.getsqsurl(awsctx)
 if url == None:
     pError('SQS url not found in ' + awsctx)
     sys.exit(2)
-profile = allctx.getprofile(awsctx)
 if profile == None:
-    pError('Profile not found in ' + awsctx)
-    sys.exit(2)
+    profile = allctx.getprofile(awsctx)
+    if profile == None:
+        pError('Profile not found in ' + awsctx)
+        sys.exit(2)
 
 # version
 if args.version:

@@ -76,6 +76,7 @@ args = parser.parse_args()
 # set result of arg parse_args
 ctxfile = args.ctxfile
 awsctx = args.awsctx
+profile = args.profile
 message = args.message
 purgequeue = args.purgequeue
 sendmsg = args.sendmsg
@@ -88,10 +89,11 @@ url = allctx.getsqsurl(awsctx)
 if url == None:
     pError('SQS url not found in ' + awsctx)
     sys.exit(2)
-profile = allctx.getprofile(awsctx)
 if profile == None:
-    pError('Profile not found in ' + awsctx)
-    sys.exit(2)
+    profile = allctx.getprofile(awsctx)
+    if profile == None:
+        pError('Profile not found in ' + awsctx)
+        sys.exit(2)
 
 # version
 if args.version:
