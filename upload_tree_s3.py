@@ -74,6 +74,23 @@ def uploadFile(s3_a, bucketname_a, path_a, file_a):
         skip_count += 1
         pDebug("Skipping older " + srcpath)
 
+def findfile(fn_a, filter_a):
+    found = False
+    for ft in filter_a:
+        if fnmatch.fnmatch(fn_a,ft):
+            found = True
+            break
+    return found
+
+def finddir(dir_a, filter_a):
+    found = False
+    dl = dir_a.split('/')
+    for ft in filter_a:
+        if ft in dl:
+            found = True
+            break
+    return found
+
 def pInfo(msg):
     tmsg=time.asctime()
     print(msgInfoPrefix+tmsg+": "+msg)
@@ -113,13 +130,14 @@ def Summary(hdr):
 defLogfile = './update_to_s3.log'
 defMsg = 'updated s3'
 defTypeMsg = 's3change'
-defCtxFile = 'awscontext.json'
 defAwsCtx = 'default'
 
 # parse input
 parser = ArgumentParser( description = "script to copy local directory tree to s3 and send an sqs msg" )
-parser.add_argument( "-C", "--ctxfile", default = defCtxFile,
-                     help = "Contexts json file [default: " + defCtxFile + "]" )
+parser.add_argument( "-C", "--ctxfile",
+                     help = "Contexts json file [default: awscontext.json]" )
+parser.add_argument( "-p", "--profile",
+                     help = "Profile for aws credentials [default: based on awsctx]" )
 parser.add_argument( "-a", "--awsctx", default = defAwsCtx,
                      help = "Contexts json file [default: " + defAwsCtx + "]" )
 parser.add_argument( "-r", "--recursive", action="store_true", default = False,
@@ -127,13 +145,13 @@ parser.add_argument( "-r", "--recursive", action="store_true", default = False,
 parser.add_argument( "-c", "--changed", action="store_false", default = True,
                      help = "Only upload new or changed (by date modified) [default: True]" )
 parser.add_argument( "-i", "--include",
-                     help = "Filter the files to include [default: no filtering]" )
+                     help = "Filter the files (comma delimited) to include [default: no filtering]" )
 parser.add_argument( "-e", "--exclude",
-                     help = "Filter the files to exlude [default: no filtering]" )
+                     help = "Filter the files (comma delimited) to exlude [default: no filtering]" )
 parser.add_argument( "-I", "--incdir",
-                     help = "Filter the directories to include [default: no filtering]" )
+                     help = "Filter the directories (comma delimited) to include [default: no filtering]" )
 parser.add_argument( "-E", "--exdir",
-                     help = "Filter the directories to exlude [default: no filtering]" )
+                     help = "Filter the directories (comma delimited) to exlude [default: no filtering]" )
 parser.add_argument( "-L", "--links", action="store_true", default = False,
                      help = "Follow symbolic links [default: False]" )
 parser.add_argument( "-m", "--message", default = defMsg,
@@ -158,6 +176,7 @@ args = parser.parse_args()
 # set result of arg parse_args
 ctxfile = args.ctxfile
 awsctx = args.awsctx
+profile = args.profile
 message = args.message
 typemessage = args.typemessage
 logfile = args.logfile
@@ -185,10 +204,11 @@ url = allctx.getsqsurl(awsctx)
 if url == None:
     pError('SQS url not found in ' + awsctx)
     sys.exit(2)
-profile = allctx.getprofile(awsctx)
 if profile == None:
-    pError('Profile not found in ' + awsctx)
-    sys.exit(2)
+    profile = allctx.getprofile(awsctx)
+    if profile == None:
+        pError('Profile not found in ' + awsctx)
+        sys.exit(2)
 
 # version
 if args.version:
@@ -220,13 +240,20 @@ if test:
     debug = True
     nomessaging = True
     summary = True
+# create list of inc/ex
+delim = ','
+if include != None:
+    include = include.replace(' ','').split(delim)
+if exclude != None:
+    exclude = exclude.replace(' ','').split(delim)
 # if including or excluding directories then it's recursive
 if incdir != None or exdir != None:
     recursive = True
     if incdir != None:
-        incdir = srcdir + '/' + incdir
+        incdir = incdir.replace(' ','').split(delim)
     if exdir != None:
-        exdir = srcdir + '/' + exdir
+        exdir = exdir.replace(' ','').split(delim)
+
 # summary
 if summary:
     Summary("Summary of " + __file__)
@@ -262,19 +289,19 @@ else:
         #print("dir: " + dir)
         #print("\tfiles: " + str(files))
         if incdir != None:
-            if dir.find(incdir,0,len(incdir)) == -1:
+            if not finddir(dir, incdir):
                 continue
         elif exdir != None:
-            if dir.find(exdir,0,len(exdir)) == 0:
+            if finddir(dir, exdir):
                 continue
         if len(files) > 0:
             for filename in files:
                 # check for filters
                 if include != None:
-                    if not fnmatch.fnmatch(filename,include):
+                    if not findfile(filename, include):
                         continue
                 elif exclude != None:
-                    if fnmatch.fnmatch(filename,exclude):
+                    if findfile(filename,exclude):
                         continue
                 if test:
                     pDebug('Testing: would upload ' + dir + '/' + filename + ' to s3://' + bucketname)
