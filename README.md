@@ -47,3 +47,8 @@ sqs_tool.py -P
 cd /projects/analysts/kuraisa
 upload_tree_s3.py -N
 ```
+9. <i>Example 9</i> - Recursively upload from the cwd (where the cwd is a directory under /projects) but do not include the results, log, plots or data directories and do not includ an files starting with "fail"
+```{r}
+cd /projects/analysts/kuraisa
+python2.7 ~/aws_s3/upload_tree_s3.py -E results,log,plots,data -e "fail*"
+```
