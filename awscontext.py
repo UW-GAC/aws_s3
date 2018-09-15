@@ -7,6 +7,8 @@ class awscontext(object):
         self.verbose = verbose
         self.ctx_file = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])),
                                      "awscontext.json")
+        if self.verbose:
+            print(">>>awscontext: ctx file is: " + self.ctx_file)
         if ctx_file != None:
             self.ctx_file = ctx_file
         # open the json ctx file
@@ -32,7 +34,7 @@ class awscontext(object):
             sys.exit(2)
         if self.verbose:
             for key,value in self.contexts.iteritems():
-                print( "\t>>> key: " + key + "  value: " + str(value))
+                print( "\t>>>awscontext: key: " + key + "  value: " + str(value))
     def getctxnames(self):
         return self.ctxnames
     def getctx(self, name_a):
