@@ -12,6 +12,7 @@ import     fnmatch
 import     datetime
 from       dateutil import tz
 import     sqsmsg
+import     awscontext
 
 try:
     import boto3
@@ -108,17 +109,19 @@ def Summary(hdr):
     print( '\tTest: ' + str(test))
     tmsg=time.asctime()
     print( '\tTime: ' + tmsg)
-
 # defaults
-defSqsUrl = 'https://sqs.us-west-2.amazonaws.com/988956399400/s3_test'
-defS3Bucket = 'projects-pearson'
 defLogfile = './update_to_s3.log'
 defMsg = 'updated s3'
 defTypeMsg = 's3change'
+defCtxFile = 'awscontext.json'
+defAwsCtx = 'default'
+
 # parse input
 parser = ArgumentParser( description = "script to copy local directory tree to s3 and send an sqs msg" )
-parser.add_argument( "-u", "--url", default = defSqsUrl,
-                     help = "url of sqs [default: " + defSqsUrl + "]" )
+parser.add_argument( "-C", "--ctxfile", default = defCtxFile,
+                     help = "Contexts json file [default: " + defCtxFile + "]" )
+parser.add_argument( "-a", "--awsctx", default = defAwsCtx,
+                     help = "Contexts json file [default: " + defAwsCtx + "]" )
 parser.add_argument( "-r", "--recursive", action="store_true", default = False,
                      help = "Recursively copy tree folder and subfolders [default: False]" )
 parser.add_argument( "-c", "--changed", action="store_false", default = True,
@@ -139,14 +142,10 @@ parser.add_argument( "-t", "--typemessage", default = defTypeMsg,
                      help = "type of message to send to sqs [default: " + defTypeMsg + "]" )
 parser.add_argument( "-N", "--nomessaging",action="store_true", default = False,
                      help = "No messages when update completes [default: False]" )
-parser.add_argument( "-b", "--bucketname", default = defS3Bucket,
-                     help = "destination s3 bucket name [default: " + defS3Bucket + "]" )
 parser.add_argument( "-l", "--logfile", default = defLogfile,
                      help = "log file of sync to s3 [default: " + defLogfile + "]" )
 parser.add_argument( "-s", "--source",
                      help = "source of folder or file in tree to copy [default: cwd's tree]" )
-parser.add_argument( "-p", "--profile",
-                     help = "aws cli profile [default: default]" )
 parser.add_argument( "-D", "--Debug", action="store_true", default = False,
                      help = "Turn on debug output [default: False]" )
 parser.add_argument( "-S", "--summary", action="store_true", default = False,
@@ -157,15 +156,14 @@ parser.add_argument( "--version", action="store_true", default = False,
                      help = "Print version of " + __file__ )
 args = parser.parse_args()
 # set result of arg parse_args
-url = args.url
+ctxfile = args.ctxfile
+awsctx = args.awsctx
 message = args.message
 typemessage = args.typemessage
-bucketname = args.bucketname
 logfile = args.logfile
 debug = args.Debug
 source = args.source
 summary = args.summary
-profile = args.profile
 include = args.include
 exclude = args.exclude
 recursive = args.recursive
@@ -175,6 +173,22 @@ incdir = args.incdir
 exdir = args.exdir
 links = args.links
 test = args.test
+
+# create the awscontext object
+allctx = awscontext.awscontext(ctx_file = ctxfile, verbose = debug)
+
+bucketname = allctx.getbucketname(awsctx)
+if bucketname == None:
+    pError('Bucket name not found in ' + awsctx)
+    sys.exit(2)
+url = allctx.getsqsurl(awsctx)
+if url == None:
+    pError('SQS url not found in ' + awsctx)
+    sys.exit(2)
+profile = allctx.getprofile(awsctx)
+if profile == None:
+    pError('Profile not found in ' + awsctx)
+    sys.exit(2)
 
 # version
 if args.version:

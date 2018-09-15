@@ -141,12 +141,12 @@ defMsglog = '/tmp/syncs3_messages.log'
 defLogfile = '/tmp/syncs3_details.log'
 # parse input
 parser = ArgumentParser( description = "script to copy local files to s3 and send an sqs msg" )
-parser.add_argument( "-u", "--url", default = defSqsUrl,
-                     help = "url of sqs [default: " + defSqsUrl + "]" )
+parser.add_argument( "-C", "--ctxfile", default = defCtxFile,
+                     help = "Contexts json file [default: " + defCtxFile + "]" )
+parser.add_argument( "-a", "--awsctx", default = defAwsCtx,
+                     help = "Contexts json file [default: " + defAwsCtx + "]" )
 parser.add_argument( "-P", "--purgequeue", action="store_true", default = False,
                      help = "Purge sqs queue after receiving first message [default: false]" )
-parser.add_argument( "-b", "--bucket", default = defS3Bucket,
-                     help = "Source s3 bucket [default: " + defS3Bucket + "]" )
 parser.add_argument( "-w", "--waittime", type = int, default = 20,
                      help = "Wait time for checking messages (secs) [default: 20 (max)]" )
 parser.add_argument( "-m", "--messagelog", default = defMsglog,
@@ -155,8 +155,6 @@ parser.add_argument( "-l", "--logfile", default = defLogfile,
                      help = "Detail log file [default: " + defLogfile + "]" )
 parser.add_argument( "-d", "--destfolder",
                      help = "Destination root folder [default: same root folder as in bucket (e.g., /projects)]" )
-parser.add_argument( "-p", "--profile",
-                     help = "aws cli profile [default: default]" )
 parser.add_argument( "-D", "--Debug", action="store_true", default = False,
                      help = "Turn on debug output [default: False]" )
 parser.add_argument( "-S", "--summary", action="store_true", default = False,
@@ -165,13 +163,10 @@ parser.add_argument( "--version", action="store_true", default = False,
                      help = "Print version of " + __file__ )
 args = parser.parse_args()
 # set result of arg parse_args
-url = args.url
 messagelog = args.messagelog
 purgequeue = args.purgequeue
-bucketname = args.bucket
 debug = args.Debug
 summary = args.summary
-profile = args.profile
 waittime = args.waittime
 destfolder = args.destfolder
 logfile = args.logfile
@@ -179,6 +174,23 @@ changed = True
 dall = True
 summary = True
 sourcefolder = ''
+
+# create the awscontext object
+allctx = awscontext.awscontext(ctx_file = ctxfile, verbose = debug)
+
+bucketname = allctx.getbucketname(awsctx)
+if bucketname == None:
+    pError('Bucket name not found in ' + awsctx)
+    sys.exit(2)
+url = allctx.getsqsurl(awsctx)
+if url == None:
+    pError('SQS url not found in ' + awsctx)
+    sys.exit(2)
+profile = allctx.getprofile(awsctx)
+if profile == None:
+    pError('Profile not found in ' + awsctx)
+    sys.exit(2)
+
 # version
 if args.version:
     print(__file__ + " version: " + version)

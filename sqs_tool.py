@@ -14,6 +14,7 @@ from       argparse import ArgumentParser
 from       datetime import datetime, timedelta
 import     getpass
 import     sqsmsg
+import     awscontext
 
 # init globals
 version='1.0'
@@ -50,13 +51,17 @@ def Summary(hdr):
     print( '\tTime: ' + tmsg)
 
 # defaults
-defSqsUrl = 'https://sqs.us-west-2.amazonaws.com/988956399400/s3_test'
+defSqsUrl = 'https://sqs.us-east-1.amazonaws.com/591206506624/nhlbi-uw-s3'
 defMsg = "Test message from " + __file__
+defCtxFile = 'awscontext.json'
+defAwsCtx = 'default'
 
 # parse input
 parser = ArgumentParser( description = "script to copy local files to s3 and send an sqs msg" )
-parser.add_argument( "-u", "--url", default = defSqsUrl,
-                     help = "url of sqs [default: " + defSqsUrl + "]" )
+parser.add_argument( "-C", "--ctxfile", default = defCtxFile,
+                     help = "Contexts json file [default: " + defCtxFile + "]" )
+parser.add_argument( "-a", "--awsctx", default = defAwsCtx,
+                     help = "Contexts json file [default: " + defAwsCtx + "]" )
 parser.add_argument( "-P", "--purgequeue", action="store_true", default = False,
                      help = "Purge sqs queue [default: False]" )
 parser.add_argument( "-l", "--listmsgs", action="store_true", default = False,
@@ -65,18 +70,29 @@ parser.add_argument( "-s", "--sendmsg", action="store_true", default = False,
                      help = "Send test message to sqs [default: False]" )
 parser.add_argument( "-m", "--message", default = defMsg,
                      help = "test message to send to sqs [default: " + defMsg + "]" )
-parser.add_argument( "-p", "--profile",
-                     help = "aws cli profile [default: default]" )
 parser.add_argument( "--version", action="store_true", default = False,
                      help = "Print version of " + __file__ )
 args = parser.parse_args()
 # set result of arg parse_args
-url = args.url
+ctxfile = args.ctxfile
+awsctx = args.awsctx
 message = args.message
 purgequeue = args.purgequeue
 sendmsg = args.sendmsg
 listmsgs = args.listmsgs
-profile = args.profile
+
+# create the awscontext object
+allctx = awscontext.awscontext(ctx_file = ctxfile, verbose = debug)
+
+url = allctx.getsqsurl(awsctx)
+if url == None:
+    pError('SQS url not found in ' + awsctx)
+    sys.exit(2)
+profile = allctx.getprofile(awsctx)
+if profile == None:
+    pError('Profile not found in ' + awsctx)
+    sys.exit(2)
+
 # version
 if args.version:
     print(__file__ + " version: " + version)
