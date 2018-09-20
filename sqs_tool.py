@@ -60,6 +60,8 @@ defAwsCtx = 'default'
 parser = ArgumentParser( description = "script to copy local files to s3 and send an sqs msg" )
 parser.add_argument( "-C", "--ctxfile", default = defCtxFile,
                      help = "Contexts json file [default: " + defCtxFile + "]" )
+parser.add_argument( "-p", "--profile",
+                     help = "Profile for aws credentials [default: based on awsctx]" )
 parser.add_argument( "-a", "--awsctx", default = defAwsCtx,
                      help = "Contexts json file [default: " + defAwsCtx + "]" )
 parser.add_argument( "-P", "--purgequeue", action="store_true", default = False,
@@ -70,6 +72,8 @@ parser.add_argument( "-s", "--sendmsg", action="store_true", default = False,
                      help = "Send test message to sqs [default: False]" )
 parser.add_argument( "-m", "--message", default = defMsg,
                      help = "test message to send to sqs [default: " + defMsg + "]" )
+parser.add_argument( "-D", "--Debug", action="store_true", default = False,
+                     help = "Turn on debug output [default: False]" )
 parser.add_argument( "--version", action="store_true", default = False,
                      help = "Print version of " + __file__ )
 args = parser.parse_args()
@@ -81,6 +85,7 @@ message = args.message
 purgequeue = args.purgequeue
 sendmsg = args.sendmsg
 listmsgs = args.listmsgs
+debug = args.Debug
 
 # create the awscontext object
 allctx = awscontext.awscontext(ctx_file = ctxfile, verbose = debug)
