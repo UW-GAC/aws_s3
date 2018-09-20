@@ -66,9 +66,13 @@ def uploadFile(s3_a, bucketname_a, path_a, file_a):
 
     if upload:
         pInfo('Uploading ' + srcpath +' to s3://' + bucketname_a + '/' + destpath)
-        s3.Bucket(bucketname_a).upload_file(srcpath, destpath,
-                                            ExtraArgs={'StorageClass': 'STANDARD_IA',
-                                                       'ServerSideEncryption': 'AES256'})
+        try:
+            s3.Bucket(bucketname_a).upload_file(srcpath, destpath,
+                                                ExtraArgs={'StorageClass': 'STANDARD_IA',
+                                                           'ServerSideEncryption': 'AES256'})
+        except Exception as e:
+            pError('S3 bucket (' + bucketname_a + ') upload error: ' + str(e))
+            sys.exit(2)
         upload_count += 1
     else:
         skip_count += 1
@@ -105,7 +109,7 @@ def pDebug(msg):
         print(debugPrefix+tmsg+": "+msg)
 def Summary(hdr):
     print(hdr)
-    print( '\tVersion: ' + version)
+    print( '\t========  Copy Info ==========')
     print( '\tSource file: ' + srcfile)
     print( '\tSource dir: ' + srcdir)
     print ('\tInclude filter: ' + str(include))
@@ -114,14 +118,22 @@ def Summary(hdr):
     print ('\tDirectories exclude filter: ' + str(exdir))
     print ('\tRecursive copy: ' + str(recursive))
     print ('\tCopy changed or new files: ' + str(changed))
-    print( '\tLog file of update: ' + logfile)
+    print( '\tNo messages to SQS when update complete: ' + str(nomessaging))
+    print( '\t========  Configuration Info ==========')
+    print( '\tContext cfg file: ' + str(ctxfile))
+    print( '\tContext name: ' + str(awsctx))
     print( '\tS3 Bucket: ' + bucketname)
-    print( '\tAWS cli profile: ' + profile)
+    print( '\tAWS credentials profile: ' + profile)
+    print( '\t========  SQS Info ==========')
+    if sqsname != None:
+        print( '\tSQS context name: ' + sqsname)
+    print( '\tSQS URL: ' + url)
     print( '\tSQS message: ' + message)
     print( '\tSQS type of message: ' + typemessage)
     print( '\tSQS full encoded message: ' + sqsmsg)
-    print( '\tSQS URL: ' + url)
-    print( '\tNo messages to SQS when update complete: ' + str(nomessaging))
+    print( '\t========  General Info ==========')
+    print( '\tVersion: ' + version)
+    print( '\tLog file of update: ' + logfile)
     print( '\tDebug: ' + str(debug))
     print( '\tTest: ' + str(test))
     tmsg=time.asctime()
@@ -138,8 +150,12 @@ parser.add_argument( "-C", "--ctxfile",
                      help = "Contexts json file [default: awscontext.json]" )
 parser.add_argument( "-p", "--profile",
                      help = "Profile for aws credentials [default: based on awsctx]" )
+parser.add_argument( "-b", "--bucketname",
+                     help = "S3 bucket name [default: based on awsctx]" )
+parser.add_argument( "--sqsname",
+                     help = "SQS queue name [default: based on awsctx]" )
 parser.add_argument( "-a", "--awsctx", default = defAwsCtx,
-                     help = "Contexts json file [default: " + defAwsCtx + "]" )
+                     help = "Context name [default: " + defAwsCtx + "]" )
 parser.add_argument( "-r", "--recursive", action="store_true", default = False,
                      help = "Recursively copy tree folder and subfolders [default: False]" )
 parser.add_argument( "-c", "--changed", action="store_false", default = True,
@@ -166,7 +182,7 @@ parser.add_argument( "-s", "--source",
                      help = "source of folder or file in tree to copy [default: cwd's tree]" )
 parser.add_argument( "-D", "--Debug", action="store_true", default = False,
                      help = "Turn on debug output [default: False]" )
-parser.add_argument( "-S", "--summary", action="store_true", default = False,
+parser.add_argument( "-S", "--summary", action="store_false", default = True,
                      help = "Print summary prior to executing [default: False]" )
 parser.add_argument( "-T", "--test", action="store_true", default = False,
                      help = "Test without upload or sending message [default: False]" )
@@ -177,6 +193,8 @@ args = parser.parse_args()
 ctxfile = args.ctxfile
 awsctx = args.awsctx
 profile = args.profile
+bucketname = args.bucketname
+sqsname = args.sqsname
 message = args.message
 typemessage = args.typemessage
 logfile = args.logfile
@@ -196,19 +214,31 @@ test = args.test
 # create the awscontext object
 allctx = awscontext.awscontext(ctx_file = ctxfile, verbose = debug)
 
-bucketname = allctx.getbucketname(awsctx)
 if bucketname == None:
-    pError('Bucket name not found in ' + awsctx)
-    sys.exit(2)
-url = allctx.getsqsurl(awsctx)
+    bucketname = allctx.getbucketname(awsctx)
+    if bucketname == None:
+        pError('Bucket name not found in ' + awsctx)
+        sys.exit(2)
+elif bucketname not in allctx.getbucketnames():
+        pInfo('Warning: bucket ' + bucketname + ' not found in bucket list of cfg file ' +
+              str(allctx.getbucketnames()))
+
+if sqsname == None:
+    url = allctx.getsqsurl(awsctx)
+else:
+    url = allctx.getsqsurl_byname(sqsname)
 if url == None:
     pError('SQS url not found in ' + awsctx)
     sys.exit(2)
+
 if profile == None:
     profile = allctx.getprofile(awsctx)
     if profile == None:
         pError('Profile not found in ' + awsctx)
         sys.exit(2)
+elif profile not in allctx.getprofilenames():
+        pInfo('Warning: profile ' + profile + ' not found in profile list of cfg file ' +
+              str(allctx.getprofilenames()))
 
 # version
 if args.version:
@@ -257,14 +287,15 @@ if incdir != None or exdir != None:
 # summary
 if summary:
     Summary("Summary of " + __file__)
-    if not test:
-        sys.exit()
 
 # Create boto3 session - any clients created from this session will use credentials
 # from the [dev] section of ~/.aws/credentials.
-session = boto3.Session(profile_name=profile)
-s3 = session.resource('s3')
-
+try:
+    session = boto3.Session(profile_name=profile)
+    s3 = session.resource('s3')
+except Exception as e:
+    pError('boto3 session or client exception ' + str(e))
+    sys.exit(2)
 if srcfile != '':
     # process single file
     if test:
