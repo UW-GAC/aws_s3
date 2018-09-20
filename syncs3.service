@@ -8,7 +8,7 @@ Type=simple
 Restart=always
 RestartSec=1
 User=ubuntu
-ExecStart=/usr/bin/env syncs3.py -d /projects
+ExecStart=/usr/bin/env syncs3.py
 
 [Install]
 WantedBy=multi-user.target
