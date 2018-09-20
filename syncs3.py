@@ -12,6 +12,7 @@ import     datetime
 from       dateutil import tz
 import     distutils.dir_util
 import     sqsmsg
+import     awscontext
 
 try:
     import boto3
@@ -131,7 +132,7 @@ def pollSQS(sqs_a, url_a, waittime_a):
         ServiceLog('Keyboard interrupt; exiting')
         sys.exit()
     except Exception as e:
-	ServiceLog('Exception while polling: ' + str(e))
+        ServiceLog('Exception while polling: ' + str(e))
         sys.exit(2)
 # defaults
 defSqsUrl = 'https://sqs.us-west-2.amazonaws.com/988956399400/s3_test'
@@ -139,12 +140,16 @@ defS3Bucket = 'projects-pearson'
 defRootfolder = "/nfs_ebs"
 defMsglog = '/tmp/syncs3_messages.log'
 defLogfile = '/tmp/syncs3_details.log'
+defAwsCtx = 'default'
+
 # parse input
 parser = ArgumentParser( description = "script to copy local files to s3 and send an sqs msg" )
-parser.add_argument( "-C", "--ctxfile", default = defCtxFile,
-                     help = "Contexts json file [default: " + defCtxFile + "]" )
+parser.add_argument( "-C", "--ctxfile",
+                     help = "Contexts json file [default: awscontext.json]" )
 parser.add_argument( "-p", "--profile",
                      help = "Profile for aws credentials [default: based on awsctx]" )
+parser.add_argument( "-b", "--bucketname",
+                     help = "S3 bucket name [default: based on awsctx]" )
 parser.add_argument( "-a", "--awsctx", default = defAwsCtx,
                      help = "Contexts json file [default: " + defAwsCtx + "]" )
 parser.add_argument( "-P", "--purgequeue", action="store_true", default = False,
@@ -155,8 +160,8 @@ parser.add_argument( "-m", "--messagelog", default = defMsglog,
                      help = "message log [default: " + defMsglog + "]" )
 parser.add_argument( "-l", "--logfile", default = defLogfile,
                      help = "Detail log file [default: " + defLogfile + "]" )
-parser.add_argument( "-d", "--destfolder",
-                     help = "Destination root folder [default: same root folder as in bucket (e.g., /projects)]" )
+parser.add_argument( "-d", "--destfolder", default = defRootfolder,
+                     help = "Destination root folder [default: " + defRootfolder + "]" )
 parser.add_argument( "-D", "--Debug", action="store_true", default = False,
                      help = "Turn on debug output [default: False]" )
 parser.add_argument( "-S", "--summary", action="store_true", default = False,
@@ -168,6 +173,7 @@ args = parser.parse_args()
 ctxfile = args.ctxfile
 awsctx = args.awsctx
 profile = args.profile
+bucketname = args.bucketname
 messagelog = args.messagelog
 purgequeue = args.purgequeue
 debug = args.Debug
@@ -183,14 +189,17 @@ sourcefolder = ''
 # create the awscontext object
 allctx = awscontext.awscontext(ctx_file = ctxfile, verbose = debug)
 
-bucketname = allctx.getbucketname(awsctx)
 if bucketname == None:
-    pError('Bucket name not found in ' + awsctx)
-    sys.exit(2)
+    bucketname = allctx.getbucketname(awsctx)
+    if bucketname == None:
+        pError('Bucket name not found in ' + awsctx)
+        sys.exit(2)
+
 url = allctx.getsqsurl(awsctx)
 if url == None:
     pError('SQS url not found in ' + awsctx)
     sys.exit(2)
+
 if profile == None:
     profile = allctx.getprofile(awsctx)
     if profile == None:
@@ -213,14 +222,18 @@ if summary:
     Summary("Summary of " + __file__)
 # Create boto3 session - any clients created from this session will use credentials
 # from the [dev] section of ~/.aws/credentials.
-session = boto3.Session(profile_name=profile)
-s3 = session.resource('s3')
+try:
+    session = boto3.Session(profile_name=profile)
+    s3 = session.resource('s3')
+    # get the sqs client
+    sqs = session.client("sqs")
+except Exception as e:
+    pError('boto3 session or client exception ' + str(e))
+    sys.exit(2)
 # open message log
 mlog = open (messagelog, 'a+', 1)
 # open detail log file
 dlog = open (logfile, 'w', 1)
-# get the sqs client
-sqs = session.client("sqs")
 
 # loop for ever to process messages
 ServiceLog("forever loop to get sqs message ...")
