@@ -80,12 +80,12 @@ upload_tree_s3.py -N
 cd /projects/analysts/kuraisa
 python2.7 ~/aws_s3/upload_tree_s3.py -E results,log,plots,data -e "fail*"
 ```
-10. <i>Example 9</i> - Recursively upload from the cwd (where the cwd is a directory under /projects) but do not include the results, log, plots or data directories and do not include an files starting with "fail".  Specify a different config file.
+10. <i>Example 10</i> - Recursively upload from the cwd (where the cwd is a directory under /projects) but do not include the results, log, plots or data directories and do not include an files starting with "fail".  Specify a different config file.
 ```{r}
 cd /projects/analysts/kuraisa
 python2.7 ~/aws_s3/upload_tree_s3.py -E results,log,plots,data -e "fail*" -C test.cfg
 ```
-11. <i>Example 9</i> - Recursively upload new files from a specified folder and its subfolders to a specifically named bucket and using a specified credentials profile (which must exist in ~/.aws/credentials)
+11. <i>Example 11</i> - Recursively upload new files from a specified folder and its subfolders to a specifically named bucket and using a specified credentials profile (which must exist in ~/.aws/credentials)
 ```{r}
 cd /projects/analysts/kuraisa
 python2.7 ~/aws_s3/upload_tree_s3.py -s /project/topmed/simdata -r -c -profile uw -b uw-simdata
