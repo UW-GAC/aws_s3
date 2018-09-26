@@ -21,7 +21,7 @@ except ImportError:
     sys.exit(1)
 
 # init globals
-version='1.0'
+version='2.0'
 msgErrPrefix='>>> Error: '
 msgInfoPrefix='>>> Info: '
 debugPrefix='>>> Debug: '
