@@ -12,6 +12,8 @@ import     fnmatch
 import     datetime
 from       dateutil import tz
 import     distutils.dir_util
+import     sqsmsg
+import     awscontext
 
 try:
     import boto3
@@ -20,7 +22,7 @@ except ImportError:
     sys.exit(1)
 
 # init globals
-version='1.0'
+version='2.0'
 msgErrPrefix='>>> Error: '
 msgInfoPrefix='>>> Info: '
 debugPrefix='>>> Debug: '
@@ -93,6 +95,7 @@ def Summary(hdr):
     print(hdr)
     print( '\tVersion: ' + version)
     print( '\tAWS profile: ' + profile)
+    print( '\tS3 Bucket: ' + bucketname)
     print( '\tSource folder: ' + srcfolder)
     if destfolder == None:
         print( '\tDestination root folder: same as in S3 bucket')
@@ -102,36 +105,38 @@ def Summary(hdr):
     print ('\tInclude filter: ' + str(include))
     print ('\tExclude filter: ' + str(exclude))
     print( '\tLog file of update: ' + logfile)
-    print( '\tS3 Bucket: ' + bucketname)
-    print( '\tSQS url: ' + url)
     print( '\tDebug: ' + str(debug))
+    print( '\tTest: ' + str(test))
     tmsg=time.asctime()
     print( '\tTime: ' + tmsg)
 
 # defaults
-defSqsUrl = 'https://sqs.us-west-2.amazonaws.com/988956399400/s3_test'
-defS3Bucket = 'projects-pearson'
-defLogfile = './update_to_s3.log'
+defLogfile = './download_from_s3.log'
+defAwsCtx = 'default'
+defRootfolder = '/projects'
 # parse input
 parser = ArgumentParser( description = "script to copy local directory tree to s3 and send an sqs msg" )
-parser.add_argument( "-u", "--url", default = defSqsUrl,
-                     help = "url of sqs [default: " + defSqsUrl + "]" )
-parser.add_argument( "-c", "--changed", action="store_true", default = False,
-                     help = "Only download changed or new files (by date modified) [default: False]" )
+parser.add_argument( "-C", "--ctxfile",
+                     help = "Contexts json file [default: awscontext.json]" )
+parser.add_argument( "-p", "--profile",
+                     help = "Profile for aws credentials [default: based on awsctx]" )
+parser.add_argument( "-b", "--bucketname",
+                     help = "S3 bucket name [default: based on awsctx]" )
+parser.add_argument( "-a", "--awsctx", default = defAwsCtx,
+                     help = "Contexts json file [default: " + defAwsCtx + "]" )
+parser.add_argument( "-l", "--logfile", default = defLogfile,
+                     help = "Detail log file [default: " + defLogfile + "]" )
+parser.add_argument( "-d", "--destfolder", default = defRootfolder,
+                     help = "Destination root folder [default: " + defRootfolder + "]" )
 parser.add_argument( "-i", "--include",
                      help = "Filter the files to include [default: no filtering]" )
 parser.add_argument( "-e", "--exclude",
                      help = "Filter the files to exlude [default: no filtering]" )
-parser.add_argument( "-b", "--bucketname", default = defS3Bucket,
-                     help = "s3 bucket name [default: " + defS3Bucket + "]" )
-parser.add_argument( "-l", "--logfile", default = defLogfile,
-                     help = "log file of sync to s3 [default: " + defLogfile + "]" )
 parser.add_argument( "-s", "--source",
                      help = "source folder (or key) in s3 bucket to copy [default: all folders in bucket ]" )
-parser.add_argument( "-d", "--destfolder",
-                     help = "Destination root folder [default: same root folder as in bucket (e.g., /projects)]" )
-parser.add_argument( "-p", "--profile",
-                     help = "aws cli profile [default: default]" )
+
+parser.add_argument( "-T", "--test", action="store_true", default = False,
+                     help = "Test without upload or sending message [default: False]" )
 parser.add_argument( "-D", "--Debug", action="store_true", default = False,
                      help = "Turn on debug output [default: False]" )
 parser.add_argument( "-S", "--summary", action="store_true", default = False,
@@ -140,17 +145,43 @@ parser.add_argument( "--version", action="store_true", default = False,
                      help = "Print version of " + __file__ )
 args = parser.parse_args()
 # set result of arg parse_args
-url = args.url
+ctxfile = args.ctxfile
+awsctx = args.awsctx
+profile = args.profile
 bucketname = args.bucketname
-logfile = args.logfile
 debug = args.Debug
+summary = args.summary
+destfolder = args.destfolder
+logfile = args.logfile
+test = args.test
+
 source = args.source
 summary = args.summary
 profile = args.profile
 include = args.include
 exclude = args.exclude
-changed = args.changed
 destfolder = args.destfolder
+changed = True
+
+# create the awscontext object
+allctx = awscontext.awscontext(ctx_file = ctxfile, verbose = debug)
+
+if bucketname == None:
+    bucketname = allctx.getbucketname(awsctx)
+    if bucketname == None:
+        pError('Bucket name not found in ' + awsctx)
+        sys.exit(2)
+
+url = allctx.getsqsurl(awsctx)
+if url == None:
+    pError('SQS url not found in ' + awsctx)
+    sys.exit(2)
+
+if profile == None:
+    profile = allctx.getprofile(awsctx)
+    if profile == None:
+        pError('Profile not found in ' + awsctx)
+        sys.exit(2)
 
 # check destfolder
 if destfolder != None:
@@ -168,18 +199,19 @@ else:
 if args.version:
     print(__file__ + " version: " + version)
     sys.exit()
-# create aws session with s3 with appropriate credentials
-if profile == None:
-    profile = 'default'
+
 # summary
 if summary:
     Summary("Summary of " + __file__)
-    sys.exit()
 
 # Create boto3 session - any clients created from this session will use credentials
 # from the [dev] section of ~/.aws/credentials.
-session = boto3.Session(profile_name=profile)
-s3 = session.resource('s3')
+try:
+    session = boto3.Session(profile_name=profile)
+    s3 = session.resource('s3')
+except Exception as e:
+    pError('boto3 session or client exception ' + str(e))
+    sys.exit(2)
 # get the keys (folders/paths) that have data
 # if download all, we use objects.all
 keys = []
@@ -192,7 +224,7 @@ if dall:
         mtimes.append(obj.last_modified)
 # else we must use a paginator to get the filtered objects (in case > 1000 objects)
 else:
-    pInfo('Getting keys in S3 bucket ' + bucketname + ' from prefix: ' + srcFolder)
+    pInfo('Getting keys in S3 bucket ' + bucketname + ' from prefix: ' + srcfolder)
     client = s3.meta.client
     lo_por = client.get_paginator('list_objects')
     # filter - remove leading '/'
@@ -205,7 +237,7 @@ else:
         nc = len(o['Contents'])
         for c in range(nc):
             keys.append(o['Contents'][c]['Key'])
-            mtimes.append(['Contents'][c]['LastModified'])
+            mtimes.append(o['Contents'][c]['LastModified'])
 # iterate over keys
 noKeys = len(keys)
 pInfo('Iterating over the keys (' + str(noKeys) + ') in S3 bucket ' + bucketname)
@@ -220,8 +252,11 @@ for i in range(noKeys):
     elif exclude != None:
         if fnmatch.fnmatch(filename,exclude):
             download = False
-    if download:
-        downloadFile(s3, bucketname, key, mtime, destfolder)
+    if test:
+        pInfo("Testing: would download " + destfolder + " from S3://" + bucketname + "/" + key)
+    else:
+        if download:
+            downloadFile(s3, bucketname, key, mtime, destfolder)
 
 pInfo("Download completed.\n\tDownload count: " + str(download_count) +
                          "\n\tSkip count: " + str(skip_count) +
