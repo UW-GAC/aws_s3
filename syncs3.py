@@ -33,6 +33,7 @@ error_count = 0
 def downloadFile(s3_a, bucketname_a, key_a, mtime_a, destfolder_a, dlog_a):
     global skip_count
     global download_count
+    global error_count
     # create dst folder name based on key and destfolder_a
     if destfolder_a == None:
         dpath = '/' + key
