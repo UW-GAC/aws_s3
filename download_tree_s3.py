@@ -115,7 +115,7 @@ defLogfile = './download_from_s3.log'
 defAwsCtx = 'default'
 defRootfolder = '/projects'
 # parse input
-parser = ArgumentParser( description = "script to copy local directory tree to s3 and send an sqs msg" )
+parser = ArgumentParser( description = "script to download a tree/folder/file from s3 to a local directory" )
 parser.add_argument( "-C", "--ctxfile",
                      help = "Contexts json file [default: awscontext.json]" )
 parser.add_argument( "-p", "--profile",
@@ -136,7 +136,7 @@ parser.add_argument( "-s", "--source",
                      help = "source folder (or key) in s3 bucket to copy [default: all folders in bucket ]" )
 
 parser.add_argument( "-T", "--test", action="store_true", default = False,
-                     help = "Test without upload or sending message [default: False]" )
+                     help = "Test without downloading [default: False]" )
 parser.add_argument( "-D", "--Debug", action="store_true", default = False,
                      help = "Turn on debug output [default: False]" )
 parser.add_argument( "-S", "--summary", action="store_true", default = False,
@@ -171,11 +171,6 @@ if bucketname == None:
     if bucketname == None:
         pError('Bucket name not found in ' + awsctx)
         sys.exit(2)
-
-url = allctx.getsqsurl(awsctx)
-if url == None:
-    pError('SQS url not found in ' + awsctx)
-    sys.exit(2)
 
 if profile == None:
     profile = allctx.getprofile(awsctx)
