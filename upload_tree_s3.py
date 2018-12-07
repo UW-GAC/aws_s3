@@ -25,25 +25,16 @@ version='2.0'
 msgErrPrefix='>>> Error: '
 msgInfoPrefix='>>> Info: '
 debugPrefix='>>> Debug: '
-upload_count = 0
-skip_count = 0
 
 #max size in bytes before uploading in parts. between 1 and 5 GB recommended
 MAX_SIZE = 20 * 1000 * 1000
 #size of parts when uploading in parts
 PART_SIZE = 6 * 1000 * 1000
 
-def uploadFile(s3_a, bucketname_a, path_a, file_a):
-    global skip_count
-    global upload_count
-    srcpath = os.path.join(path_a, file_a)
-    destpath = os.path.join(path_a, file_a)
-    # remove leading "/" in destpath
-    if destpath[0] == "/":
-        destpath = destpath[1:len(destpath)]
+def uploadFile(s3_a, bucketname_a, srcpath_a, destpath_a, test_a):
     # if only uploading changed check
     if changed:
-        key = destpath
+        key = destpath_a
         obj = s3.Bucket(bucketname_a).Object(key)
         try:
             # compare last modifed times in s3 (utc) vs local (timestamp)
@@ -52,7 +43,7 @@ def uploadFile(s3_a, bucketname_a, path_a, file_a):
             s3_dm_local = s3_dm_utc.astimezone(tz.tzlocal())
             s3_dm_notz = s3_dm_local.replace(tzinfo=None)
             # now get local time (as a timestamp) and convert to datetime
-            lmt_ts = os.path.getmtime(srcpath)
+            lmt_ts = os.path.getmtime(srcpath_a)
             local_dm_notz = datetime.datetime.fromtimestamp(lmt_ts)
             # compare
             if local_dm_notz > s3_dm_notz:
@@ -64,19 +55,21 @@ def uploadFile(s3_a, bucketname_a, path_a, file_a):
     else:
         upload = True
 
-    if upload:
-        pInfo('Uploading ' + srcpath +' to s3://' + bucketname_a + '/' + destpath)
-        try:
-            s3.Bucket(bucketname_a).upload_file(srcpath, destpath,
-                                                ExtraArgs={'StorageClass': 'STANDARD_IA',
-                                                           'ServerSideEncryption': 'AES256'})
-        except Exception as e:
-            pError('S3 bucket (' + bucketname_a + ') upload error: ' + str(e))
-            sys.exit(2)
-        upload_count += 1
-    else:
-        skip_count += 1
-        pDebug("Skipping older " + srcpath)
+    if upload and not test_a:
+        pDebug('Uploading ' + srcpath_a +' to s3://' + bucketname_a + '/' + destpath_a)
+        if os.path.islink(srcpath_a) and not links:
+            upload = False
+            pInfo('Skipping the linked file ' + srcpath_a + ' eventhough followlinks is False')
+        else:
+            try:
+                s3.Bucket(bucketname_a).upload_file(srcpath_a, destpath_a,
+                                                    ExtraArgs={'StorageClass': 'STANDARD_IA',
+                                                               'ServerSideEncryption': 'AES256'})
+            except Exception as e:
+                pError('S3 bucket (' + bucketname_a + ') upload error: ' + str(e))
+                sys.exit(2)
+
+    return upload
 
 def findfile(fn_a, filter_a):
     found = False
@@ -88,11 +81,13 @@ def findfile(fn_a, filter_a):
 
 def finddir(dir_a, filter_a):
     found = False
-    dl = dir_a.split('/')
+    ld = len(dir_a)
     for ft in filter_a:
-        if ft in dl:
-            found = True
-            break
+        lft = len(ft)
+        if ld >= lft:
+            if dir_a[0:lft] == ft:
+                found = True
+                break
     return found
 
 def pInfo(msg):
@@ -311,33 +306,55 @@ else:
     else:
         pInfo("Uploading files in " + srcdir + "...")
     alldirs = {}
+    totfiles = 0
     for (source, dirname, filename) in os.walk(srcdir, followlinks = links):
         alldirs[source] = filename
+        totfiles = totfiles + len(filename)
         if not recursive:
             break
+    upload_count = 0
+    skip_count = 0
     print("\tIterating over " + str(len(alldirs)) + " directory/directories ...")
     for dir, files in alldirs.iteritems():
         #print("dir: " + dir)
         #print("\tfiles: " + str(files))
         if incdir != None:
             if not finddir(dir, incdir):
+                skip_count = skip_count + len(files)
                 continue
         elif exdir != None:
             if finddir(dir, exdir):
+                skip_count = skip_count + len(files)
                 continue
         if len(files) > 0:
             for filename in files:
                 # check for filters
                 if include != None:
                     if not findfile(filename, include):
+                        skip_count += 1
                         continue
                 elif exclude != None:
                     if findfile(filename,exclude):
+                        skip_count += 1
                         continue
-                if test:
-                    pDebug('Testing: would upload ' + dir + '/' + filename + ' to s3://' + bucketname)
+                srcpath = os.path.join(dir, filename)
+                destpath = srcpath
+                # remove leading "/" in destpath
+                if destpath[0] == "/":
+                    destpath = destpath[1:len(destpath)]
+                upfile = uploadFile(s3, bucketname, srcpath, destpath, test)
+                if upfile:
+                    upload_count += 1
+                    if not test:
+                        msghdr = 'Uploaded '
+                    else:
+                        msghdr = "Testing: Would have uploaded "
+                    pInfo(msghdr + '(' + str(upload_count+skip_count) + '/' + str(totfiles) + ')' +
+                          srcpath + ' to s3://' + bucketname)
                 else:
-                    uploadFile(s3, bucketname, dir, filename)
+                    skip_count += 1
+                    pDebug('Skipped ' + srcpath)
+
 if nomessaging:
     pInfo("Message not sent to SQS")
 else:
