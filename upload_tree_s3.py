@@ -138,6 +138,8 @@ defLogfile = './update_to_s3.log'
 defMsg = 'updated s3'
 defTypeMsg = 's3change'
 defAwsCtx = 'default'
+# begin time
+tbegin=time.asctime()
 
 # parse input
 parser = ArgumentParser( description = "script to copy local directory tree to s3 and send an sqs msg" )
@@ -364,4 +366,6 @@ else:
     pDebug('Sending SQS:\nURL: ' + url + '\nmessage to encode: ' + message)
     response=sqs.send_message(QueueUrl=url,MessageBody=sqsmsg)
 
-pInfo("Upload completed.\n\tUpload count: " + str(upload_count) + "\n\tSkip count: " + str(skip_count))
+pInfo("Upload completed.\n\tBegin time: " + tbegin +
+      "\n\tUpload count: " + str(upload_count) +
+      "\n\tSkip count: " + str(skip_count))
