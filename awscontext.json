@@ -6,35 +6,35 @@
             "name": "nhlbi-uw-s3",
             "url": "https://sqs.us-west-2.amazonaws.com/988956399400/s3_test"
         },
-        "nhlbi" : {
+        "nhlbi_data" : {
             "name": "nhlbi-uw-s3",
             "url": "https://sqs.us-east-1.amazonaws.com/591206506624/nhlbi-uw-s3"
         },
-        "nhlbi_dev" : {
+        "nhlbi_compute" : {
             "name": "nhlbi-uw-s3",
             "url": "https://sqs.us-east-1.amazonaws.com/591206506624/nhlbi-uw-s3"
         }
     },
     "context": {
         "default": {
-            "sqsctx": "nhlbi_dev",
+            "sqsctx": "nhlbi_compute",
             "s3bucket": "nhlbi-uw-pearson-projects",
-            "profile": "nhlbi_dev"
+            "profile": "nhlbi_compute"
         },
         "uw": {
             "sqsctx": "uw",
             "s3bucket": "projects-pearson",
-            "profile": "default"
+            "profile": "uw"
         },
-        "nhlbi": {
-            "sqsctx": "nhlbi",
+        "nhlbi_data": {
+            "sqsctx": "nhlbi_data",
             "s3bucket": "nih-nhlbi-topmed-dcc",
-            "profile": "nhlbi"
+            "profile": "nhlbi_data"
         },
-        "nhlbi_dev": {
-            "sqsctx": "nhlbi_dev",
+        "nhlbi_compute": {
+            "sqsctx": "nhlbi_compute",
             "s3bucket": "nhlbi-uw-pearson-projects",
-            "profile": "nhlbi_dev"
+            "profile": "nhlbi_compute"
         }
     }
 }
