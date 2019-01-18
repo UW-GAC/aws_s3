@@ -82,10 +82,13 @@ def findfile(fn_a, filter_a):
 def finddir(dir_a, filter_a):
     found = False
     ld = len(dir_a)
+    filter_a
     for ft in filter_a:
+        ft = "/" + ft
+        ft2 = ft + "/"
         lft = len(ft)
         if ld >= lft:
-            if dir_a[0:lft] == ft:
+            if dir_a[ld-lft:ld] == ft or ft2 in dir_a:
                 found = True
                 break
     return found
