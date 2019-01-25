@@ -298,11 +298,18 @@ except Exception as e:
     sys.exit(2)
 if srcfile != '':
     # process single file
+    skip_count = 0
+    upload_count = 1
+    srcpath = srcdir + "/" + srcfile
     if test:
-        pDebug("Testing: would upload "  + srcdir + "/" + srcfile)
+        pDebug("Testing: would upload "  + srcpath)
     else:
-        pInfo("Uploading single file " + srcdir + "/" + srcfile)
-        uploadFile(s3, bucketname, srcdir, srcfile)
+        pInfo("Uploading single file " + srcpath)
+        destpath = srcpath
+        # remove leading "/" in destpath
+        if destpath[0] == "/":
+            destpath = destpath[1:len(destpath)]
+        uploadFile(s3, bucketname, srcpath, destpath, test)
 else:
     # process directory
     if recursive:
