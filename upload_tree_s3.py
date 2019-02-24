@@ -299,7 +299,7 @@ except Exception as e:
 if srcfile != '':
     # process single file
     skip_count = 0
-    upload_count = 1
+    upload_count = 0
     srcpath = srcdir + "/" + srcfile
     if test:
         pDebug("Testing: would upload "  + srcpath)
@@ -309,7 +309,10 @@ if srcfile != '':
         # remove leading "/" in destpath
         if destpath[0] == "/":
             destpath = destpath[1:len(destpath)]
-        uploadFile(s3, bucketname, srcpath, destpath, test)
+        if not uploadFile(s3, bucketname, srcpath, destpath, test):
+            skip_count = skip_count + 1
+        else:
+            upload_count = upload_count + 1
 else:
     # process directory
     if recursive:
