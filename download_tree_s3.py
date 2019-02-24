@@ -33,6 +33,7 @@ error_count = 0
 def downloadFile(s3_a, bucketname_a, key_a, mtime_a, destfolder_a):
     global skip_count
     global download_count
+    global error_count
     # create dst folder name based on key and destfolder_a
     if destfolder_a == None:
         dpath = '/' + key
@@ -72,8 +73,8 @@ def downloadFile(s3_a, bucketname_a, key_a, mtime_a, destfolder_a):
         try:
             s3.Bucket(bucketname_a).download_file(key, dpath)
             download_count += 1
-        except:
-            pError('Download failed; perhaps bucket has changed since the list of keys were created.')
+        except Exception as e:
+            pError('Bucket.download error: ' + str(e))
             error_count += 1
     else:
         skip_count += 1
@@ -126,7 +127,7 @@ parser.add_argument( "-a", "--awsctx", default = defAwsCtx,
                      help = "Contexts json file [default: " + defAwsCtx + "]" )
 parser.add_argument( "-l", "--logfile", default = defLogfile,
                      help = "Detail log file [default: " + defLogfile + "]" )
-parser.add_argument( "-d", "--destfolder", default = defRootfolder,
+parser.add_argument( "-d", "--destfolder",
                      help = "Destination root folder [default: " + defRootfolder + "]" )
 parser.add_argument( "-i", "--include",
                      help = "Filter the files to include [default: no filtering]" )
@@ -248,7 +249,10 @@ for i in range(noKeys):
         if fnmatch.fnmatch(filename,exclude):
             download = False
     if test:
-        pInfo("Testing: would download " + destfolder + " from S3://" + bucketname + "/" + key)
+        if destfolder == None:
+            pInfo("Testing: would download to basefolder of S3://" + bucketname + "/" + key)
+        else:
+            pInfo("Testing: would download to " + destfolder + " from S3://" + bucketname + "/" + key)
     else:
         if download:
             downloadFile(s3, bucketname, key, mtime, destfolder)
