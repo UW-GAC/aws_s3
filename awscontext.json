@@ -4,7 +4,7 @@
     "sqsctx": {
         "uw" : {
             "name": "nhlbi-uw-s3",
-            "url": "https://sqs.us-west-2.amazonaws.com/988956399400/s3_test"
+            "url": "https://sqs.us-west-2.amazonaws.com/988956399400/s3_uw"
         },
         "nhlbi_data" : {
             "name": "nhlbi-uw-s3",
