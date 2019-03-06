@@ -136,7 +136,7 @@ def pollSQS(sqs_a, url_a, waittime_a):
         ServiceLog('Exception while polling: ' + str(e))
         sys.exit(2)
 # defaults
-defSqsUrl = 'https://sqs.us-west-2.amazonaws.com/988956399400/s3_test'
+defSqsUrl = 'https://sqs.us-west-2.amazonaws.com/988956399400/s3_uw'
 defS3Bucket = 'projects-pearson'
 defRootfolder = "/nfs_ebs"
 defMsglog = '/tmp/syncs3_messages.log'
