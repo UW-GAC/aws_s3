@@ -55,12 +55,12 @@ def uploadFile(s3_a, bucketname_a, srcpath_a, destpath_a, test_a):
     else:
         upload = True
 
-    if upload and not test_a:
-        pDebug('Uploading ' + srcpath_a +' to s3://' + bucketname_a + '/' + destpath_a)
-        if os.path.islink(srcpath_a) and not links:
+    if upload:
+        if os.path.islink(srcpath_a):
             upload = False
-            pInfo('Skipping the linked file ' + srcpath_a + ' eventhough followlinks is False')
-        else:
+            pInfo('Skipping the linked file ' + srcpath_a)
+        elif not test_a:
+            pDebug('Uploading ' + srcpath_a +' to s3://' + bucketname_a + '/' + destpath_a)
             try:
                 s3.Bucket(bucketname_a).upload_file(srcpath_a, destpath_a,
                                                     ExtraArgs={'StorageClass': 'STANDARD_IA',
