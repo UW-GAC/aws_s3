@@ -21,7 +21,7 @@ except ImportError:
     sys.exit(1)
 
 # init globals
-version='2.0'
+version='2.3'
 msgErrPrefix='>>> Error: '
 msgInfoPrefix='>>> Info: '
 debugPrefix='>>> Debug: '
@@ -30,7 +30,7 @@ download_count = 0
 skip_count = 0
 error_count = 0
 
-def downloadFile(s3_a, bucketname_a, key_a, mtime_a, destfolder_a, dlog_a):
+def downloadFile(s3_a, bucketname_a, key_a, mtime_a, destfolder_a, dlog_a, elog_a):
     global skip_count
     global download_count
     global error_count
@@ -47,8 +47,15 @@ def downloadFile(s3_a, bucketname_a, key_a, mtime_a, destfolder_a, dlog_a):
         dfile = False
         destdir = os.path.dirname(dpath)
         if not os.path.exists(destdir):
-            distutils.dir_util.mkpath(destdir)
-    # if dfile exists, download if only changed
+            try:
+                distutils.dir_util.mkpath(destdir)
+            except Exception as e:
+                msg = 'Error: attempting to mkdir ' + destdir + " (" + str(e) + ")"
+                LogInfo(dlog_a, msg)
+                LogInfo(elog_a, msg)
+                error_count += 1
+                return
+        # if dfile exists, download if only changed
     if dfile:
         if changed:
             s3_dm_utc = mtime_a
@@ -73,8 +80,10 @@ def downloadFile(s3_a, bucketname_a, key_a, mtime_a, destfolder_a, dlog_a):
         try:
             s3.Bucket(bucketname_a).download_file(key, dpath)
             download_count += 1
-        except:
-            LogInfo(dlog_a, 'Download failed; perhaps bucket has changed since the list of keys were created.')
+        except Exception as e:
+            msg = 'Error: download failed on ' + key + "/" + dpath + "\n\t(" + str(e) + ")"
+            LogInfo(dlog_a, msg)
+            LogInfo(elog_a, msg)
             error_count += 1
     else:
         skip_count += 1
@@ -83,6 +92,7 @@ def downloadFile(s3_a, bucketname_a, key_a, mtime_a, destfolder_a, dlog_a):
 def LogInfo(dlog_a, msg_a):
     tmsg=time.asctime()
     dlog_a.write(logPrefix+tmsg+": "+msg_a+"\n")
+    dlog_a.flush()
 
 def ServiceLog(msg_a):
     print(__file__ + ": " + msg_a)
@@ -91,15 +101,19 @@ def ServiceLog(msg_a):
 def pInfo(msg):
     tmsg=time.asctime()
     print(msgInfoPrefix+tmsg+": "+msg)
+    sys.stdout.flush()
 
 def pError(msg):
     tmsg=time.asctime()
     print(msgErrPrefix+tmsg+": "+msg)
+    sys.stdout.flush()
 
 def pDebug(msg):
     if debug:
         tmsg=time.asctime()
         print(debugPrefix+tmsg+": "+msg)
+        sys.stdout.flush()
+
 def Summary(hdr):
     print(hdr)
     print( '\tVersion: ' + version)
@@ -108,6 +122,7 @@ def Summary(hdr):
     print( '\tDestination Root Folder: ' + destfolder)
     print( '\tMessage log: ' + messagelog)
     print( '\tDetail log: ' + logfile)
+    print( '\tError log: ' + errorfile)
     print( '\tAWS cli profile: ' + profile)
     print( '\tSQS URL: ' + url)
     print( '\tWait time for sqs msg: ' + str(waittime))
@@ -128,6 +143,7 @@ def pollSQS(sqs_a, url_a, waittime_a):
                 theMsg = msg[msgKey][0]['Body']     # msg is encoded
                 rHandle = msg[msgKey][0]['ReceiptHandle']
                 receivedmsg = True
+        pDebug('Received message (' + str(msg) + ')')
         return (theMsg,rHandle)
     except KeyboardInterrupt:
         ServiceLog('Keyboard interrupt; exiting')
@@ -141,6 +157,7 @@ defS3Bucket = 'projects-pearson'
 defRootfolder = "/nfs_ebs"
 defMsglog = '/tmp/syncs3_messages.log'
 defLogfile = '/tmp/syncs3_details.log'
+defErrorfile = '/tmp/syncs3_errors.log'
 defAwsCtx = 'default'
 
 # parse input
@@ -161,6 +178,8 @@ parser.add_argument( "-m", "--messagelog", default = defMsglog,
                      help = "message log [default: " + defMsglog + "]" )
 parser.add_argument( "-l", "--logfile", default = defLogfile,
                      help = "Detail log file [default: " + defLogfile + "]" )
+parser.add_argument( "-e", "--errorfile", default = defErrorfile,
+                     help = "Detail log file [default: " + defErrorfile + "]" )
 parser.add_argument( "-d", "--destfolder", default = defRootfolder,
                      help = "Destination root folder [default: " + defRootfolder + "]" )
 parser.add_argument( "-D", "--Debug", action="store_true", default = False,
@@ -182,6 +201,7 @@ summary = args.summary
 waittime = args.waittime
 destfolder = args.destfolder
 logfile = args.logfile
+errorfile = args.errorfile
 changed = True
 dall = True
 summary = True
@@ -235,6 +255,8 @@ except Exception as e:
 mlog = open (messagelog, 'a+', 1)
 # open detail log file
 dlog = open (logfile, 'w', 1)
+# open error log file
+elog = open (errorfile, 'a+', 1)
 
 # loop for ever to process messages
 ServiceLog("forever loop to get sqs message ...")
@@ -243,11 +265,15 @@ while True:
     mh = pollSQS(sqs, url, waittime)
     msge = mh[0]
     rHandle = mh[1]
-    # decode msg into dictionary
+    # decode msg into dictionary]
+    pDebug('Processing msg ...')
     try:
         msgd = sqsmsg.decode(msge)
     except:
-        LogInfo(dlog, 'Invalid format of message; it will be deleted.')
+        msg = 'Error: decoding message; it will be deleted.' + '\n\t(' + str(e) + ')'
+        LogInfo(dlog, msg)
+        LogInfo(elog, msg)
+        pDebug(msg)
         sqs.delete_message(QueueUrl=url,
                            ReceiptHandle=rHandle)
         continue
@@ -272,7 +298,7 @@ while True:
             key = keys[i]
             filename = os.path.basename(key)
             mtime = mtimes[i]
-            downloadFile(s3, bucketname, key, mtime, destfolder, dlog)
+            downloadFile(s3, bucketname, key, mtime, destfolder, dlog, elog)
         # write the log and delete the message
         mlog.write(msge + '\n')
         ServiceLog('Sync complete - files downloaded/skip/error: ' + str(download_count) +
