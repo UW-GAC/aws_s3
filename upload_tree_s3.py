@@ -13,12 +13,19 @@ import     datetime
 from       dateutil import tz
 import     sqsmsg
 import     awscontext
+import     signal
 
 try:
     import boto3
 except ImportError:
     print (__file__ + ": python boto3 not supported.")
     sys.exit(1)
+
+def keyboardInterruptHandler(signal, frame):
+    print("KeyboardInterrupt (ID: {}) has been caught. Exiting program ...".format(signal))
+    exit(0)
+
+signal.signal(signal.SIGINT, keyboardInterruptHandler)
 
 # init globals
 version='2.0'
@@ -272,16 +279,31 @@ if test:
     summary = True
 # create list of inc/ex
 delim = ','
+pd = '/'
 if include != None:
+    # include cannot include a path (/)
+    if pd in include:
+        pError("Include files cannot include a path (" + include + ")")
+        sys.exit(2)
     include = include.replace(' ','').split(delim)
 if exclude != None:
+    # exlude cannot include a path (/)
+    if pd in exclude:
+        pError("Exclude files cannot include a path (" + exclude + ")")
+        sys.exit(2)
     exclude = exclude.replace(' ','').split(delim)
 # if including or excluding directories then it's recursive
 if incdir != None or exdir != None:
     recursive = True
     if incdir != None:
+        if pd in incdir:
+            pError("Include dirs cannot include a path (" + incdir + ")")
+            sys.exit(2)
         incdir = incdir.replace(' ','').split(delim)
     if exdir != None:
+        if pd in exdir:
+            pError("Exclude dirs cannot include a path (" + exdir + ")")
+            sys.exit(2)
         exdir = exdir.replace(' ','').split(delim)
 
 # summary
