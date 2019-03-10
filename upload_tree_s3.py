@@ -125,13 +125,13 @@ def Summary(hdr):
     print ('\tCopy changed or new files: ' + str(changed))
     print( '\tNo messages to SQS when update complete: ' + str(nomessaging))
     print( '\t========  Configuration Info ==========')
-    print( '\tContext cfg file: ' + str(ctxfile))
-    print( '\tContext name: ' + str(awsctx))
+    print( '\tContext cfg file argument: ' + str(ctxfile))
+    print( '\taws context: ' + str(awsctx))
     print( '\tS3 Bucket: ' + bucketname)
     print( '\tAWS credentials profile: ' + profile)
     print( '\t========  SQS Info ==========')
     if sqsname != None:
-        print( '\tSQS context name: ' + sqsname)
+        print( '\tSQS name: ' + sqsname)
     print( '\tSQS URL: ' + url)
     print( '\tSQS message: ' + message)
     print( '\tSQS type of message: ' + typemessage)
@@ -147,7 +147,7 @@ def Summary(hdr):
 defLogfile = './update_to_s3.log'
 defMsg = 'updated s3'
 defTypeMsg = 's3change'
-defAwsCtx = 'default'
+defAwsCtx = 'uw'
 # begin time
 tbegin=time.asctime()
 
@@ -156,13 +156,13 @@ parser = ArgumentParser( description = "script to copy local directory tree to s
 parser.add_argument( "-C", "--ctxfile",
                      help = "Contexts json file [default: awscontext.json]" )
 parser.add_argument( "-p", "--profile",
-                     help = "Profile for aws credentials [default: based on awsctx]" )
+                     help = "Profile for aws credentials [default: based on awsctx in ctxfile]" )
 parser.add_argument( "-b", "--bucketname",
-                     help = "S3 bucket name [default: based on awsctx]" )
-parser.add_argument( "--sqsname",
-                     help = "SQS queue name [default: based on awsctx]" )
+                     help = "S3 bucket name [default: based on awsctx in ctxfile]" )
 parser.add_argument( "-a", "--awsctx", default = defAwsCtx,
-                     help = "Context name [default: " + defAwsCtx + "]" )
+                     help = "aws contex in ctxfile [default: " + defAwsCtx + "]")
+parser.add_argument( "--sqsname",
+                     help = "SQS queue name [default: based on awsctx in ctxfile]" )
 parser.add_argument( "-r", "--recursive", action="store_true", default = False,
                      help = "Recursively copy tree folder and subfolders [default: False]" )
 parser.add_argument( "-c", "--changed", action="store_false", default = True,
@@ -221,31 +221,21 @@ test = args.test
 # create the awscontext object
 allctx = awscontext.awscontext(ctx_file = ctxfile, verbose = debug)
 
+# check for valid awsctx
+if allctx.getctx(awsctx) == None:
+    pError('Error: awsctx ' + awsctx + ' not found')
+    sys.exit(2)
+
 if bucketname == None:
     bucketname = allctx.getbucketname(awsctx)
     if bucketname == None:
         pError('Bucket name not found in ' + awsctx)
         sys.exit(2)
-elif bucketname not in allctx.getbucketnames():
-        pInfo('Warning: bucket ' + bucketname + ' not found in bucket list of cfg file ' +
-              str(allctx.getbucketnames()))
 
-if sqsname == None:
-    url = allctx.getsqsurl(awsctx)
-else:
-    url = allctx.getsqsurl_byname(sqsname)
-if url == None:
-    pError('SQS url not found in ' + awsctx)
-    sys.exit(2)
+url = allctx.getsqsurl(awsctx, sqsname)
 
 if profile == None:
     profile = allctx.getprofile(awsctx)
-    if profile == None:
-        pError('Profile not found in ' + awsctx)
-        sys.exit(2)
-elif profile not in allctx.getprofilenames():
-        pInfo('Warning: profile ' + profile + ' not found in profile list of cfg file ' +
-              str(allctx.getprofilenames()))
 
 # version
 if args.version:
@@ -268,7 +258,7 @@ else:
     else:
         srcfile = ''
         srcdir = os.path.abspath(source)
-# create aws session with s3 with appropriate credentials
+# set the aws profile
 if profile == None:
     profile = 'default'
 # sqs message

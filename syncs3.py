@@ -152,24 +152,24 @@ def pollSQS(sqs_a, url_a, waittime_a):
         ServiceLog('Exception while polling: ' + str(e))
         sys.exit(2)
 # defaults
-defSqsUrl = 'https://sqs.us-west-2.amazonaws.com/988956399400/s3_uw'
-defS3Bucket = 'projects-pearson'
 defRootfolder = "/nfs_ebs"
 defMsglog = '/tmp/syncs3_messages.log'
 defLogfile = '/tmp/syncs3_details.log'
 defErrorfile = '/tmp/syncs3_errors.log'
-defAwsCtx = 'default'
+defAwsCtx = 'uw'
 
 # parse input
 parser = ArgumentParser( description = "script to copy local files to s3 and send an sqs msg" )
 parser.add_argument( "-C", "--ctxfile",
                      help = "Contexts json file [default: awscontext.json]" )
 parser.add_argument( "-p", "--profile",
-                     help = "Profile for aws credentials [default: based on awsctx]" )
+                     help = "Profile for aws credentials [default: based on awsctx in ctxfile]" )
 parser.add_argument( "-b", "--bucketname",
-                     help = "S3 bucket name [default: based on awsctx]" )
+                     help = "S3 bucket name [default: based on awsctx in ctxfile]" )
 parser.add_argument( "-a", "--awsctx", default = defAwsCtx,
-                     help = "Contexts json file [default: " + defAwsCtx + "]" )
+                     help = "aws contex in ctxfile [default: " + defAwsCtx + "]")
+parser.add_argument( "--sqsname",
+                     help = "SQS queue name [default: based on awsctx in ctxfile]" )
 parser.add_argument( "-P", "--purgequeue", action="store_true", default = False,
                      help = "Purge sqs queue after receiving first message [default: false]" )
 parser.add_argument( "-w", "--waittime", type = int, default = 20,
@@ -192,6 +192,7 @@ args = parser.parse_args()
 # set result of arg parse_args
 ctxfile = args.ctxfile
 awsctx = args.awsctx
+sqsname = args.sqsname
 profile = args.profile
 bucketname = args.bucketname
 messagelog = args.messagelog
@@ -216,7 +217,7 @@ if bucketname == None:
         pError('Bucket name not found in ' + awsctx)
         sys.exit(2)
 
-url = allctx.getsqsurl(awsctx)
+url = allctx.getsqsurl(awsctx, sqsname)
 if url == None:
     pError('SQS url not found in ' + awsctx)
     sys.exit(2)
