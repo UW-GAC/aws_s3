@@ -3,7 +3,7 @@ import os
 import sys
 
 class awscontext(object):
-    def __init__(self,ctx_file=None, ctx_version="2.0", verbose = False):
+    def __init__(self,ctx_file=None, ctx_version="3.0", verbose = False):
         self.verbose = verbose
         self.ctx_file = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])),
                                      "awscontext.json")
@@ -24,98 +24,45 @@ class awscontext(object):
         else:
             print("Error: " + key + " key not found in " + self.ctx_file)
             sys.exit(2)
-        self.sqs_ctxkey = "sqsctx"
-        self.sqs_namekey = "name"
-        self.sqs_urlkey = "url"
-        # get the sqs ontexts
-        key = self.sqs_ctxkey
+        self.key_context = "context"
+        self.key_profile = "profile"
+        self.key_sqsname = "sqs_name"
+        self.key_bucket = "s3bucket"
+        self.key_baseurl = "sqs_base_url"
+        # get the the context dict
+        key = self.key_context
         if key in ctxinfo:
-            self.sqsctxs = ctxinfo[key]
-            self.sqsctxnames = self.sqsctxs.keys()
+            self.cdict = ctxinfo[key]
+            self.cdict_keys = self.cdict.keys()
         else:
             print("Error: " + key + " key not found in " + self.ctx_file)
             sys.exit(2)
         if self.verbose:
-            for key,value in self.sqsctxs.iteritems():
-                print( "\t>>>sqscontext: key: " + key + "  value: " + str(value))
-        # get the contexts
-        key = "context"
-        if key in ctxinfo:
-            self.contexts = ctxinfo[key]
-            self.ctxnames = self.contexts.keys()
-        else:
-            print("Error: " + key + " key not found in " + self.ctx_file)
-            sys.exit(2)
-        if self.verbose:
-            for key,value in self.contexts.iteritems():
-                print( "\t>>>awscontext: key: " + key + "  value: " + str(value))
-        # create list of profiles and bucket names
-        self.profile_names = []
-        self.bucket_names = []
-        for ctxname,ctxdict in self.contexts.iteritems():
-            if self.verbose:
-                print( "\t>>>awscontext: key: " + ctxname + "  value: " + str(ctxdict))
-            for key,value in ctxdict.iteritems():
-                if key == "s3bucket":
-                    self.bucket_names.append(value)
-                elif key == "profile":
-                    self.profile_names.append(value)
-
+            for key,value in self.cdict.iteritems():
+                print( "\t>>>Context dictionary: key: " + key + "  value: " + str(value))
     def getctxnames(self):
-        return self.ctxnames
-    def getsqsctxnames(self):
-        return self.sqsctxnames
-    def getprofilenames(self):
-        return self.profile_names
-    def getbucketnames(self):
-        return self.bucket_names
-    def getctx(self, name_a):
-        ctx = None
-        if name_a in self.ctxnames:
-            ctx = self.contexts[name_a]
-        return ctx
-    def getsqsctx(self, name_a):
-        sqsctx = None
-        if name_a in self.sqsctxnames:
-            sqsctx = self.sqsctxnames[name_a]
-        return sqsctx
-    def getdefaultctx(self):
-        key = 'default`'
-        if key not in self.ctxnames:
-            print("Error: " + key + " key not found in " + self.ctx_file)
-            sys.exit(2)
-        return self.contexts[key]
-    def getsqsname(self, ctxname_a):
-        name = None
-        if ctxname_a in self.ctxnames:
-            if self.sqs_ctxkey in self.contexts[ctxname_a]:
-                sqsctxname = self.contexts[ctxname_a][self.sqs_ctxkey]
-                if sqsctxname in self.sqsctxnames:
-                    if self.sqs_namekey in self.sqsctxs[sqsctxname]:
-                        name = self.sqsctxs[ctxname][self.sqs_namekey]
-        return name
-    def getsqsurl(self, ctxname_a):
-        url = None
-        if ctxname_a in self.ctxnames:
-            if self.sqs_ctxkey in self.contexts[ctxname_a]:
-                sqsctxname = self.contexts[ctxname_a][self.sqs_ctxkey]
-                if sqsctxname in self.sqsctxnames:
-                    if self.sqs_urlkey in self.sqsctxs[sqsctxname]:
-                        url = self.sqsctxs[sqsctxname][self.sqs_urlkey]
-        return url
-    def getsqsurl_byname(self, sqsctxname_a):
-        url = None
-        if sqsctxname_a in self.sqsctxnames:
-            if self.sqs_urlkey in self.sqsctxs[sqsctxname_a]:
-                url = self.sqsctxs[sqsctxname_a][self.sqs_urlkey]
-        return url
-    def getbucketname(self, name_a):
-        bn = None
-        if name_a in self.ctxnames:
-            bn = self.contexts[name_a]['s3bucket']
-        return bn
-    def getprofile(self, name_a):
+        return self.cdict_keys
+    def getprofile(self, ctxname_a):
         profile = None
-        if name_a in self.ctxnames:
-            profile = self.contexts[name_a]['profile']
+        if ctxname_a in self.cdict_keys:
+            profile = self.cdict[ctxname_a][self.key_profile]
         return profile
+    def getbucketname(self, ctxname_a):
+        bn = None
+        if ctxname_a in self.cdict_keys:
+            bn = self.cdict[ctxname_a][self.key_bucket]
+        return bn
+    def getctx(self, ctxname_a):
+        ctx = None
+        if ctxname_a in self.cdict_keys:
+            ctx = self.cdict[ctxname_a]
+        return ctx
+    def getsqsurl(self, ctxname_a, sqsname_a = None):
+        url = None
+        if ctxname_a in self.cdict_keys:
+            ctx = self.cdict[ctxname_a]
+            sqsname = ctx[self.key_sqsname]
+            if sqsname_a != None:
+                sqsname = sqsname_a
+            url = ctx[self.key_baseurl] + sqsname
+        return url
