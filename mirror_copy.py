@@ -54,7 +54,7 @@ def Summary(hdr):
     tmsg=time.asctime()
     print( '\tTime: ' + tmsg)
 # defaults
-defRemoteHost  = '52.27.98.54'
+defRemoteHost  = '52.10.169.19'
 defPvtKey = 'topmed_admin.pem'
 defRemoteUser = getpass.getuser()
 defRootDir = "/projects/"
@@ -187,4 +187,4 @@ if status:
     pError( "Executing rsync failed (" + str(status) + ")" )
     sys.exit(2)
 else:
-    pInfo( "Executing rsync ompleted without errors.")
+    pInfo( "Executing rsync completed without errors.")

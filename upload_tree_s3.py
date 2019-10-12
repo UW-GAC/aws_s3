@@ -74,7 +74,7 @@ def uploadFile(s3_a, bucketname_a, srcpath_a, destpath_a, test_a):
                                                                'ServerSideEncryption': 'AES256'})
             except Exception as e:
                 pError('S3 bucket (' + bucketname_a + ') upload error: ' + str(e))
-                sys.exit(2)
+                upload = False
 
     return upload
 
