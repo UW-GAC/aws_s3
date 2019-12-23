@@ -10,9 +10,17 @@ This project contains python scripts and files associated with TOPMed's AWS S3 a
 7. `awscontext.py` - a python module defining a python class for managing the various context options when uploading data
 8. `awscontext.json` - a configuration file specifying contexts for various AWS environments and accounts
 9. `sqsmsg.py` - a python module defining the structure of the messages sent to the SQS message queue when an upload has been completed
-### upload_tree_s3.py ###
-Because this script is used more frequently and by various users, a more detailed description is presented here.
+10. `mirror_copy.py` - a python script to execute rsync in copying tree to an NFS server on remote node (either in gcp or aws)
+11. 'mirror_cfg.json' - a json configuration file defining options used in mirror_copy.py
+### mirror_copy.py ###
+This python script is utilizes rsync to copy a source tree usually under /projects to an NFS server on either GCP or AWS.  For example, the following command is executed on Pearson with the -T option.  It executes a dry run in rsync (which is helpful just to check everything is configured correctly).  
+`python2.7 ./mirror_copy.py /projects/topmed/downloaded_data/IRC_freezes/freeze.8/gds/ -T `
 
+In this particular case, the source tree and all files under the specified folder would be synced to the NFS volume on GCP (to the default remote host). Executing the above command without the "-T" will execute the rsync command to copy any changed files.
+
+Execute the command with --help option for more details.
+
+### upload_tree_s3.py ###
 This python script utilizes boto3 (an python API to AWS services) to upload files and their associated directory tree(s) to an S3 bucket.  By default, when the upload is complete a message is sent to an AWS SQS (Simple Queue Service) queue where an application on the AWS docker image is notified and the changed files are downloaded to the NFS volume.
 
 There are at least three different AWS accounts where S3 maybe uploaded and each AWS account has different security keys for permission to access the S3 service.  Each AWS account has its own S3 buckets and its own SQS message queues. To support this diverse AWS environment, the script uses a "context" configuration file as well a command line options.  The provided context configuration file is `awscontext.json`.  There are contexts defined for the UW AWS account; the NHLBI compute account; and the NHBLI data account.  Each context includes defaults for:
