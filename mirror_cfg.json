@@ -1,0 +1,18 @@
+{
+    "gcp": {
+        "sshprivatekey": "google_compute_engine",
+        "remotehost": "35.230.54.160",
+        "remoteuser": null,
+        "rootdir": "/projects/",
+        "include": null,
+        "exclude": null
+    },
+    "aws_nih": {
+        "sshprivatekey": "topmed_admin.pem",
+        "remotehost": "52.10.169.19",
+        "remoteuser": null,
+        "rootdir": "/projects/",
+        "include": null,
+        "exclude": null
+    }
+}
