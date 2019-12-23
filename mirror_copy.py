@@ -12,7 +12,9 @@ import     datetime
 from       dateutil import tz
 import     signal
 import     glob
-
+import     json
+from copy import deepcopy
+import collections
 
 def keyboardInterruptHandler(signal, frame):
     print("KeyboardInterrupt (ID: {}) has been caught. Exiting program ...".format(signal))
@@ -25,6 +27,122 @@ version='1.0'
 msgErrPrefix='>>> Error: '
 msgInfoPrefix='>>> Info: '
 debugPrefix='>>> Debug: '
+
+# cfg is read from json into nested dictionaries
+# regular dictionary update loses default values below the first level
+# https://stackoverflow.com/questions/3232943/update-value-of-a-nested-dictionary-of-varying-depth
+def update(d, u):
+    ld = deepcopy(d)
+    for k, v in u.iteritems():
+        if isinstance(v, collections.Mapping):
+            if len(v) == 0:
+                ld[k] = u[k]
+            else:
+                r = update(d.get(k, {}), v)
+                ld[k] = r
+        else:
+            ld[k] = u[k]
+    return ld
+
+# config class
+class Config(object):
+    # constructor
+    def __init__(self, cfg_file_name="mirror_cfg.json", platform="gcp", opt_cfg=None, verbose=False):
+        self.verbose = verbose
+        self.className = self.__class__.__name__
+        self.stdCfg = cfg_file_name
+        self.optCfg = opt_cfg
+        # set path of cmd
+        self.commandPath = os.path.dirname(os.path.abspath(sys.argv[0]))
+        # get the mirror and platformCfg configuration
+        self.openCfg()
+        # opt cfg file
+        if self.optCfg != None:
+            self.openCustomCfg()
+        # update the platform and platform cfg
+        self.updatePlatform(platform)
+
+    def printVerbose(self, msg):
+        if self.verbose:
+            print(">>> Config: " + msg)
+
+    def openCfg(self):
+        # get the standard cluster cfg
+        self.stdCfg =  os.path.join(self.commandPath, self.stdCfg)
+        self.printVerbose("reading std cfg file: " + self.stdCfg)
+
+        if  not os.path.isfile(self.stdCfg):
+            pError("Config: mirror cfg file " + self.stdCfg + " does not exist.")
+            sys.error(2)
+        with open(self.stdCfg) as cfgFileHandle:
+            self.mirrorCfg = json.load(cfgFileHandle)
+
+    def openCustomCfg(self):
+        # test that the file exists
+        if  not os.path.isfile(self.optCfg):
+            pError("Config: custom cfg file " + self.optCfg + " does not exist.")
+            sys.error(2)
+        # open
+        with open(self.optCfg) as cfgFileHandle:
+            mirrorCfg = json.load(cfgFileHandle)
+        # update mirror's cfg
+        self.mirrorCfg = update(self.mirrorCfg, mirrorCfg)
+
+    def updatePlatform(self, platform):
+        self.platform = platform
+        self.printVerbose("get cfg for platform: " + self.platform)
+        if self.platform in self.mirrorCfg.keys():
+            self.platformCfg = self.mirrorCfg[self.platform]
+        else:
+            pError("Config: platform " + self.platform + " not found in cfg file " + self.cfgFile)
+            sys.error(2)
+
+    def privateKey(self):
+        key = "sshprivatekey"
+        return self.getKeyValue(key)
+
+    def remoteHost(self):
+        key = "remotehost"
+        return self.getKeyValue(key)
+
+    def remoteUser(self):
+        key = "remoteuser"
+        return self.getKeyValue(key)
+
+    def rootDir(self):
+        key = "rootdir"
+        return self.getKeyValue(key)
+
+    def include(self):
+        key = "include"
+        return self.getKeyValue(key)
+
+    def exclude(self):
+        key = "exclude"
+        return self.getKeyValue(key)
+
+    def getKeyValue(self, key):
+        if key in self.platformCfg.keys():
+            kvalue = self.platformCfg[key]
+        else:
+            pError("Config: key " + key + " not found")
+            sys.error(2)
+        return kvalue
+
+    def getPlatform(self):
+        return self.platform
+
+def setRemoteUser(cfg):
+    if cfg.remoteUser() != None:
+        remoteuser = cfg.remoteUser()
+    else:
+        luser = getpass.getuser()
+        if cfg.getPlatform() == "gcp":
+            ruser = "ext_" + luser + "_uw_edu"
+        else:
+            ruser = luser
+        remoteuser = ruser
+    return remoteuser
 
 def pInfo(msg):
     tmsg=time.asctime()
@@ -44,7 +162,7 @@ def Summary(hdr):
     print( '\tRemote host: ' + remotehost)
     print( '\tRemote user: ' + remoteuser)
     print( '\tRoot directory: ' + rootdir)
-    print( '\tSSH key: ' + privatekey)
+    print( '\tSSH key: ' + sshprivatekey)
     print ('\tInclude pattern: ' + str(include))
     print ('\tExclude pattern: ' + str(exclude))
     print( '\tVersion: ' + version)
@@ -53,29 +171,29 @@ def Summary(hdr):
     print( '\tTest: ' + str(test))
     tmsg=time.asctime()
     print( '\tTime: ' + tmsg)
-# defaults
-defRemoteHost  = '52.10.169.19'
-defPvtKey = 'topmed_admin.pem'
-defRemoteUser = getpass.getuser()
-defRootDir = "/projects/"
 # begin time
 tbegin=time.asctime()
 
+# defaults
+defPlatform = "gcp"
 # parse input
-parser = ArgumentParser( description = "Mirror copy (via rsync) source under /projects/... to NFS volume on AWS" )
+parser = ArgumentParser( description = "Mirror copy (via rsync) source under root dir (e.g., /projects/)... to NFS volume on AWS or GCP" )
 parser.add_argument( "source", nargs = '+', help = "source of files to copy" )
-parser.add_argument( "-p", "--privatekey", default = defPvtKey,
-                     help = "SSH private key [default: " + defPvtKey + "]")
-parser.add_argument( "-H", "--remotehost", default = defRemoteHost,
-                     help = "Remote host [default: " + defRemoteHost + "]")
-parser.add_argument( "-u", "--remoteuser", default = defRemoteUser,
-                     help = "Remote user [default: " + defRemoteUser + "]")
-parser.add_argument( "-R", "--rootdir", default = defRootDir,
-                     help = "Root directory to mirror [default: " + defRootDir + "]")
+parser.add_argument( "-c", "--cfgfile", help = "Custom cfg file name")
+parser.add_argument( "-s", "--sshprivatekey",
+                     help = "SSH private key [default: in cfg file]")
+parser.add_argument( "-p", "--platform", default = defPlatform,
+                     help = "Platform in cfg file [default: " + defPlatform + "]")
+parser.add_argument( "-H", "--remotehost",
+                     help = "Remote host [default: in cfg file]")
+parser.add_argument( "-u", "--remoteuser",
+                     help = "Remote user [default: based on platform")
+parser.add_argument( "-R", "--rootdir",
+                     help = "Root directory to mirror [default: in cfg file]")
 parser.add_argument( "-i", "--include",
-                     help = "Patterns (comma delimited) of file names to include (overrides -e) [default: no including]" )
+                     help = "Patterns (comma delimited) of file names to include (overrides -e) [default: none]" )
 parser.add_argument( "-e", "--exclude",
-                     help = "Patterns (comma delimited) of file names to exclude [default: no excluding]" )
+                     help = "Patterns (comma delimited) of file names to exclude [default: none")
 parser.add_argument( "-D", "--Debug", action="store_true", default = False,
                      help = "Turn on debug output [default: False]" )
 parser.add_argument( "-S", "--summary", action="store_false", default = True,
@@ -92,7 +210,9 @@ if len(args.source) > 1:
     pError('More than one commandline arguments (enclose * in quotes)')
     sys.exit(2)
 source = args.source[0]
-privatekey = args.privatekey
+cfgfile = args.cfgfile
+platform = args.platform
+sshprivatekey = args.sshprivatekey
 remotehost = args.remotehost
 remoteuser = args.remoteuser
 rootdir = args.rootdir
@@ -107,6 +227,26 @@ execute = not args.noexecute
 if args.version:
     print(__file__ + " version: " + version)
     sys.exit()
+# create config object
+cfg = Config(platform = platform, opt_cfg = cfgfile)
+
+if sshprivatekey == None:
+    sshprivatekey = cfg.privateKey()
+
+if remotehost == None:
+    remotehost = cfg.remoteHost()
+
+if remoteuser == None:
+    remoteuser = setRemoteUser(cfg)
+
+if rootdir == None:
+    rootdir = cfg.rootDir()
+
+if include == None:
+    include = cfg.include()
+
+if exclude == None:
+    exclude == cfg.exclude()
 
 # check rootdir (must have leading and trailing "/")
 slash = "/"
@@ -145,7 +285,7 @@ if summary:
 # build thr rsync command
 rscommand = "rsync -av -O --no-perms --update --chmod=Fg+w "
 # ssh
-rscommand += '"-e ssh -i ~/.ssh/' + privatekey + '" '
+rscommand += '"-e ssh -i ~/.ssh/' + sshprivatekey + '" '
 # --exclude or --include options
 delim = ','
 pd = '/'
