@@ -246,7 +246,7 @@ if include == None:
     include = cfg.include()
 
 if exclude == None:
-    exclude == cfg.exclude()
+    exclude = cfg.exclude()
 
 # check rootdir (must have leading and trailing "/")
 slash = "/"
