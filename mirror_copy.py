@@ -33,7 +33,7 @@ debugPrefix='>>> Debug: '
 # https://stackoverflow.com/questions/3232943/update-value-of-a-nested-dictionary-of-varying-depth
 def update(d, u):
     ld = deepcopy(d)
-    for k, v in u.iteritems():
+    for k, v in u.items():
         if isinstance(v, collections.Mapping):
             if len(v) == 0:
                 ld[k] = u[k]
@@ -91,7 +91,7 @@ class Config(object):
     def updatePlatform(self, platform):
         self.platform = platform
         self.printVerbose("get cfg for platform: " + self.platform)
-        if self.platform in self.mirrorCfg.keys():
+        if self.platform in list(self.mirrorCfg.keys()):
             self.platformCfg = self.mirrorCfg[self.platform]
         else:
             pError("Config: platform " + self.platform + " not found in cfg file " + self.cfgFile)
@@ -122,7 +122,7 @@ class Config(object):
         return self.getKeyValue(key)
 
     def getKeyValue(self, key):
-        if key in self.platformCfg.keys():
+        if key in list(self.platformCfg.keys()):
             kvalue = self.platformCfg[key]
         else:
             pError("Config: key " + key + " not found")
