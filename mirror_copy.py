@@ -1,4 +1,4 @@
-#! /usr/bin/env python
+#! /usr/bin/env python3
 # Mirror copy from uw pearson /projects/... to an NFS volume on aws
 import     time
 import     csv
