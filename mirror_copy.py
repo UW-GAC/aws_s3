@@ -161,7 +161,8 @@ def Summary(hdr):
     print( '\tSource: ' + source)
     print( '\tRemote host: ' + remotehost)
     print( '\tRemote user: ' + remoteuser)
-    print( '\tRoot directory: ' + rootdir)
+    print( '\tRemote root directory: ' + rootdir)
+    print( '\tPreserve root directory tree: ' + str(preserveTree))
     print( '\tSSH key: ' + sshprivatekey)
     print ('\tInclude pattern: ' + str(include))
     print ('\tExclude pattern: ' + str(exclude))
@@ -177,7 +178,7 @@ tbegin=time.asctime()
 # defaults
 defPlatform = "gcp"
 # parse input
-parser = ArgumentParser( description = "Mirror copy (via rsync) source under root dir (e.g., /projects/)... to NFS volume on AWS or GCP" )
+parser = ArgumentParser( description = "Mirror copy (via rsync) preserving tree if same root dir; else copy specified path under root dir " )
 parser.add_argument( "source", nargs = '+', help = "source of files to copy" )
 parser.add_argument( "-c", "--cfgfile", help = "Custom cfg file name")
 parser.add_argument( "-s", "--sshprivatekey",
@@ -247,17 +248,30 @@ if include == None:
 
 if exclude == None:
     exclude = cfg.exclude()
-
-# check rootdir (must have leading and trailing "/")
+# get the rootdir of the source
 slash = "/"
-if rootdir[0] != slash or rootdir[len(rootdir)-1] != "/":
-    pError("Root directory " + rootdir + " is not valid - requires leading and trailing '/'")
-    sys.exit(2)
-
-# process source
 srcAbsPath = os.path.abspath(source)
-srcDir = os.path.dirname(srcAbsPath)
-srcBasename = os.path.basename(srcAbsPath)
+srcRootdir = slash + srcAbsPath.split(slash)[1] + slash
+# check remote rootdir (must have leading "/")
+if rootdir[0] != slash:
+    pError("Root directory " + rootdir + " is not valid - requires leading " + slash)
+    sys.exit(2)
+if rootdir[len(rootdir)-1] != slash:
+    rootdir += slash
+# process source - if rootdir and srcRoodir are the same, then we'll preserve the tree under rootdir
+# but if the rootdirs are different, then we'll keep the specified src without convert to an absolute path
+# which enables user to specify how much of the source tree to preserver (with '/./')
+if srcRootdir == rootdir:
+    preserveTree = True
+    srcDir = os.path.dirname(srcAbsPath)
+    srcBasename = os.path.basename(srcAbsPath)
+    # remote stuff and direcory stuff
+    # from the absolute source path (e.g., /projects/topmed/...) we need to enable folders
+    # below root /projects by creating /projects/./ ...
+    rsource = srcAbsPath.replace(rootdir,rootdir+"./")
+else:
+    rsource = source
+    preserveTree = False
 # source can be:
 #  1. a single file
 #  2. directory
@@ -271,13 +285,6 @@ else:
     if not os.path.isdir(srcBasename) and not os.path.isfile(srcBasename):
         pError(source + " is not a file nor a directory")
         sys.exit(2)
-
-# check basename
-
-# check for valid root dir
-if srcAbsPath.find(rootdir) != 0:
-    pError("Required root directory (" + rootdir + ") is not the root directory in source: " + srcAbsPath)
-    sys.exit(2)
 
 if summary:
     Summary("Upload Tree Summary")
@@ -306,10 +313,6 @@ if exclude != None:
     for exc in exclude:
         rscommand += "--exclude=" + exc + " "
 
-# remote stuff and direcory stuff
-# from the absolute source path (e.g., /projects/topmed/...) we need to enable folders
-# below root /projects by creating /projects/./ ...
-rsource = srcAbsPath.replace(rootdir,rootdir+"./")
 
 # source
 rscommand += "--relative " + rsource + " "
