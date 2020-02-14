@@ -26,9 +26,7 @@ class awscontext(object):
             sys.exit(2)
         self.key_context = "context"
         self.key_profile = "profile"
-        self.key_sqsname = "sqs_name"
         self.key_bucket = "s3bucket"
-        self.key_baseurl = "sqs_base_url"
         # get the the context dict
         key = self.key_context
         if key in ctxinfo:
@@ -57,12 +55,3 @@ class awscontext(object):
         if ctxname_a in self.cdict_keys:
             ctx = self.cdict[ctxname_a]
         return ctx
-    def getsqsurl(self, ctxname_a, sqsname_a = None):
-        url = None
-        if ctxname_a in self.cdict_keys:
-            ctx = self.cdict[ctxname_a]
-            sqsname = ctx[self.key_sqsname]
-            if sqsname_a != None:
-                sqsname = sqsname_a
-            url = ctx[self.key_baseurl] + sqsname
-        return url

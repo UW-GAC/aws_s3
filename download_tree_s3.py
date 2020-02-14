@@ -12,7 +12,6 @@ import     fnmatch
 import     datetime
 from       dateutil import tz
 import     distutils.dir_util
-import     sqsmsg
 import     awscontext
 
 try:

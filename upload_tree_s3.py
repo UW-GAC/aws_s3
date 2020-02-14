@@ -11,7 +11,6 @@ import     getpass
 import     fnmatch
 import     datetime
 from       dateutil import tz
-import     sqsmsg
 import     awscontext
 import     signal
 
@@ -67,8 +66,8 @@ def uploadFile(s3_a, bucketname_a, srcpath_a, destpath_a, test_a):
             upload = False
             pInfo('Skipping the linked file ' + srcpath_a)
         elif not test_a:
-            pDebug('Uploading ' + srcpath_a +' to s3://' + bucketname_a + '/' + destpath_a)
             try:
+                pDebug('Uploading ' + srcpath_a +' to s3://' + bucketname_a + '/' + destpath_a)
                 s3.Bucket(bucketname_a).upload_file(srcpath_a, destpath_a,
                                                     ExtraArgs={'StorageClass': 'STANDARD_IA',
                                                                'ServerSideEncryption': 'AES256'})
@@ -123,22 +122,13 @@ def Summary(hdr):
     print ('\tDirectories exclude filter: ' + str(exdir))
     print ('\tRecursive copy: ' + str(recursive))
     print ('\tCopy changed or new files: ' + str(changed))
-    print( '\tNo messages to SQS when update complete: ' + str(nomessaging))
     print( '\t========  Configuration Info ==========')
     print( '\tContext cfg file argument: ' + str(ctxfile))
     print( '\taws context: ' + str(awsctx))
     print( '\tS3 Bucket: ' + bucketname)
     print( '\tAWS credentials profile: ' + profile)
-    print( '\t========  SQS Info ==========')
-    if sqsname != None:
-        print( '\tSQS name: ' + sqsname)
-    print( '\tSQS URL: ' + url)
-    print( '\tSQS message: ' + message)
-    print( '\tSQS type of message: ' + typemessage)
-    print( '\tSQS full encoded message: ' + sqsmsg)
     print( '\t========  General Info ==========')
     print( '\tVersion: ' + version)
-    print( '\tLog file of update: ' + logfile)
     print( '\tDebug: ' + str(debug))
     print( '\tTest: ' + str(test))
     tmsg=time.asctime()
@@ -152,7 +142,7 @@ defAwsCtx = 'uw'
 tbegin=time.asctime()
 
 # parse input
-parser = ArgumentParser( description = "script to copy local directory tree to s3 and send an sqs msg" )
+parser = ArgumentParser( description = "script to copy local directory tree to s3" )
 parser.add_argument( "-C", "--ctxfile",
                      help = "Contexts json file [default: awscontext.json]" )
 parser.add_argument( "-p", "--profile",
@@ -161,8 +151,6 @@ parser.add_argument( "-b", "--bucketname",
                      help = "S3 bucket name [default: based on awsctx in ctxfile]" )
 parser.add_argument( "-a", "--awsctx", default = defAwsCtx,
                      help = "aws contex in ctxfile [default: " + defAwsCtx + "]")
-parser.add_argument( "--sqsname",
-                     help = "SQS queue name [default: based on awsctx in ctxfile]" )
 parser.add_argument( "-r", "--recursive", action="store_true", default = False,
                      help = "Recursively copy tree folder and subfolders [default: False]" )
 parser.add_argument( "-c", "--changed", action="store_false", default = True,
@@ -177,14 +165,6 @@ parser.add_argument( "-E", "--exdir",
                      help = "Filter the directories (comma delimited) to exlude [default: no filtering]" )
 parser.add_argument( "-L", "--links", action="store_true", default = False,
                      help = "Follow symbolic links [default: False]" )
-parser.add_argument( "-m", "--message", default = defMsg,
-                     help = "message to send to sqs [default: " + defMsg + "]" )
-parser.add_argument( "-t", "--typemessage", default = defTypeMsg,
-                     help = "type of message to send to sqs [default: " + defTypeMsg + "]" )
-parser.add_argument( "-N", "--nomessaging",action="store_true", default = False,
-                     help = "No messages when update completes [default: False]" )
-parser.add_argument( "-l", "--logfile", default = defLogfile,
-                     help = "log file of sync to s3 [default: " + defLogfile + "]" )
 parser.add_argument( "-s", "--source",
                      help = "source of folder or file in tree to copy [default: cwd's tree]" )
 parser.add_argument( "-D", "--Debug", action="store_true", default = False,
@@ -192,7 +172,7 @@ parser.add_argument( "-D", "--Debug", action="store_true", default = False,
 parser.add_argument( "-S", "--summary", action="store_false", default = True,
                      help = "Print summary prior to executing [default: False]" )
 parser.add_argument( "-T", "--test", action="store_true", default = False,
-                     help = "Test without upload or sending message [default: False]" )
+                     help = "Test without upload [default: False]" )
 parser.add_argument( "--version", action="store_true", default = False,
                      help = "Print version of " + __file__ )
 args = parser.parse_args()
@@ -201,17 +181,12 @@ ctxfile = args.ctxfile
 awsctx = args.awsctx
 profile = args.profile
 bucketname = args.bucketname
-sqsname = args.sqsname
-message = args.message
-typemessage = args.typemessage
-logfile = args.logfile
 debug = args.Debug
 source = args.source
 summary = args.summary
 include = args.include
 exclude = args.exclude
 recursive = args.recursive
-nomessaging = args.nomessaging
 changed = args.changed
 incdir = args.incdir
 exdir = args.exdir
@@ -231,8 +206,6 @@ if bucketname == None:
     if bucketname == None:
         pError('Bucket name not found in ' + awsctx)
         sys.exit(2)
-
-url = allctx.getsqsurl(awsctx, sqsname)
 
 if profile == None:
     profile = allctx.getprofile(awsctx)
@@ -261,11 +234,8 @@ else:
 # set the aws profile
 if profile == None:
     profile = 'default'
-# sqs message
-sqsmsg = sqsmsg.encode(message, typemsg = typemessage)
 if test:
     debug = True
-    nomessaging = True
     summary = True
 # create list of inc/ex
 delim = ','
@@ -381,15 +351,6 @@ else:
                 else:
                     skip_count += 1
                     pDebug('Skipped ' + srcpath)
-
-if nomessaging:
-    pInfo("Message not sent to SQS")
-else:
-    # send a message to sqs
-    pInfo("Sending SQS message")
-    sqs=session.client("sqs")
-    pDebug('Sending SQS:\nURL: ' + url + '\nmessage to encode: ' + message)
-    response=sqs.send_message(QueueUrl=url,MessageBody=sqsmsg)
 
 pInfo("Upload completed.\n\tBegin time: " + tbegin +
       "\n\tUpload count: " + str(upload_count) +

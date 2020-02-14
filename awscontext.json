@@ -3,26 +3,18 @@
     "version": "3.0",
     "context": {
         "uw": {
-            "sqs_base_url": "https://sqs.us-west-2.amazonaws.com/988956399400/",
-            "sqs_name": "s3_uw",
             "s3bucket": "projects-pearson",
             "profile": "uw"
         },
         "test": {
-            "sqs_base_url": "https://sqs.us-west-2.amazonaws.com/988956399400/",
-            "sqs_name": "s3_test",
             "s3bucket": "projects-pearson",
             "profile": "uw"
         },
         "nhlbi_data": {
-            "sqs_base_url": "https://sqs.us-east-1.amazonaws.com/591206506624/",
-            "sqs_name": "nhlbi-uw-s3",
             "s3bucket": "nih-nhlbi-topmed-dcc",
             "profile": "nhlbi_data"
         },
         "nhlbi_compute": {
-            "sqs_base_url": "https://sqs.us-east-1.amazonaws.com/591206506624/",
-            "sqs_name": "nhlbi-uw-s3",
             "s3bucket": "nhlbi-uw-pearson-projects",
             "profile": "nhlbi_compute"
         }
