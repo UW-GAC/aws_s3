@@ -5,7 +5,7 @@
         "remoteuser": null,
         "rootdir": "/projects/",
         "include": null,
-        "exclude": "data,log*,report,plots,config,*.params,*fail*"
+        "exclude": "data,log*,report,plots,config,*.params,*fail*,resume"
     },
     "aws_nih": {
         "sshprivatekey": "topmed_admin.pem",
